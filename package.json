@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "opencode-wakatime",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/angristan/opencode-wakatime.git"
+  },
+  "version": "1.0.0",
+  "description": "WakaTime plugin for OpenCode - Track AI coding activity and time spent",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "opencode",
+    "wakatime",
+    "time-tracking",
+    "ai",
+    "coding",
+    "productivity"
+  ],
+  "author": "",
+  "license": "MIT",
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.0.0"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.0.0",
+    "@types/node": "^22.0.0",
+    "@types/which": "^3.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "which": "^4.0.0"
+  }
+}
