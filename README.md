@@ -1,6 +1,6 @@
 # opencode-wakatime
 
-WakaTime plugin for [OpenCode](https://github.com/opencode-ai/opencode) - Track your AI coding activity, lines of code, and time spent.
+WakaTime plugin for [OpenCode](https://github.com/sst/opencode) - Track your AI coding activity, lines of code, and time spent.
 
 Inspired by [claude-code-wakatime](https://github.com/wakatime/claude-code-wakatime).
 
@@ -30,6 +30,7 @@ You can get your API key from [WakaTime Settings](https://wakatime.com/settings/
 The plugin will automatically download wakatime-cli if not found. However, you can also install it manually:
 
 **macOS:**
+
 ```bash
 brew install wakatime-cli
 ```
@@ -78,6 +79,7 @@ The plugin hooks into OpenCode's event system:
 ### Heartbeat Data
 
 Each heartbeat includes:
+
 - **Entity**: File path being worked on
 - **Project folder**: Working directory
 - **AI line changes**: Net lines added/removed (`additions - deletions`)
