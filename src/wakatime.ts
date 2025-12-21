@@ -13,11 +13,11 @@ export interface HeartbeatParams {
   isWrite?: boolean;
 }
 
-function isWindows(): boolean {
+export function isWindows(): boolean {
   return os.platform() === "win32";
 }
 
-function buildExecOptions(): ExecFileOptions {
+export function buildExecOptions(): ExecFileOptions {
   const options: ExecFileOptions = {
     windowsHide: true,
   };
@@ -29,7 +29,7 @@ function buildExecOptions(): ExecFileOptions {
   return options;
 }
 
-function formatArgs(args: string[]): string {
+export function formatArgs(args: string[]): string {
   return args
     .map((arg) => {
       if (arg.includes(" ")) {

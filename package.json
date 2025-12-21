@@ -25,6 +25,9 @@
     "lint": "biome lint .",
     "format": "biome format .",
     "check": "biome check .",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -45,7 +48,9 @@
     "@opencode-ai/plugin": "^1.0.0",
     "@types/node": "^22.0.0",
     "@types/which": "^3.0.0",
-    "typescript": "^5.0.0"
+    "@vitest/coverage-v8": "^4.0.16",
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.16"
   },
   "dependencies": {
     "which": "^4.0.0"

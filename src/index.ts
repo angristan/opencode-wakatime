@@ -7,7 +7,7 @@ import { ensureCliInstalled, sendHeartbeat } from "./wakatime.js";
 /**
  * Represents tracked changes for a single file
  */
-interface FileChangeInfo {
+export interface FileChangeInfo {
   additions: number;
   deletions: number;
   lastModified: number;
@@ -32,7 +32,7 @@ interface FileDiff {
  * Extract file change information from tool metadata
  * Handles various tool types: edit, write, patch, multiedit, read
  */
-function extractFileChanges(
+export function extractFileChanges(
   tool: string,
   metadata: Record<string, unknown> | undefined,
   output: string,
