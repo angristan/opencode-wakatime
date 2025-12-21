@@ -22,6 +22,9 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "format": "biome format .",
+    "check": "biome check .",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -38,6 +41,7 @@
     "@opencode-ai/plugin": ">=1.0.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.3.10",
     "@opencode-ai/plugin": "^1.0.0",
     "@types/node": "^22.0.0",
     "@types/which": "^3.0.0",
