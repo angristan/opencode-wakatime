@@ -59,6 +59,34 @@ The plugin will be automatically loaded by OpenCode - no configuration needed.
 
 The plugin hooks into OpenCode's event system:
 
+```mermaid
+flowchart TB
+    subgraph OpenCode["OpenCode"]
+        A[Tool Execution<br/>edit, write, patch, multiedit] --> H1[tool.execute.after]
+        B[Chat Activity] --> H2[chat.message]
+        C[Session Events<br/>idle, end] --> H3[event]
+    end
+
+    subgraph Plugin["opencode-wakatime Plugin"]
+        H1 --> P1[Extract File Changes<br/>path, additions, deletions]
+        P1 --> Q[Heartbeat Queue]
+
+        H2 -.->|triggers| P2[Process Queue]
+        Q --> P2
+        P2 --> R[Rate Limiter<br/>1 per minute]
+
+        H3 --> P3[Flush Final<br/>Heartbeat]
+        P3 --> R
+    end
+
+    subgraph WakaTime["WakaTime"]
+        R --> CLI[wakatime-cli]
+        CLI --> API[WakaTime API]
+        API --> D[Dashboard<br/>AI Coding Metrics]
+    end
+
+```
+
 ### Hooks Used
 
 | Hook | Purpose |
