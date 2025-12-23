@@ -60,6 +60,6 @@
     "vitest": "^4.0.16"
   },
   "dependencies": {
-    "which": "^4.0.0"
+    "which": "^6.0.0"
   }
 }
