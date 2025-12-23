@@ -1,10 +1,24 @@
+import { execSync } from "node:child_process";
 import * as fs from "node:fs";
 import { createWriteStream } from "node:fs";
 import * as https from "node:https";
 import * as os from "node:os";
 import * as path from "node:path";
-import which from "which";
 import { logger } from "./logger.js";
+
+function whichSync(cmd: string): string | null {
+  try {
+    const isWindows = os.platform() === "win32";
+    const result = execSync(isWindows ? `where ${cmd}` : `which ${cmd}`, {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    const firstLine = result.trim().split("\n")[0];
+    return firstLine || null;
+  } catch {
+    return null;
+  }
+}
 
 const GITHUB_RELEASES_URL =
   "https://api.github.com/repos/wakatime/wakatime-cli/releases/latest";
@@ -87,7 +101,7 @@ export class Dependencies {
   public getCliLocationGlobal(): string | undefined {
     const binaryName = `wakatime-cli${this.isWindows() ? ".exe" : ""}`;
     try {
-      const globalPath = which.sync(binaryName, { nothrow: true });
+      const globalPath = whichSync(binaryName);
       if (globalPath) {
         logger.debug(`Found global wakatime-cli: ${globalPath}`);
         return globalPath;

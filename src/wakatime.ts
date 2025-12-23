@@ -1,10 +1,24 @@
 import { type ExecFileOptions, execFile } from "node:child_process";
+import * as fs from "node:fs";
 import * as os from "node:os";
-import pkg from "../package.json" with { type: "json" };
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { dependencies } from "./dependencies.js";
 import { logger } from "./logger.js";
 
-const VERSION = pkg.version;
+function getVersion(): string {
+  try {
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const pkg = JSON.parse(
+      fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf-8"),
+    );
+    return pkg.version;
+  } catch {
+    return "unknown";
+  }
+}
+
+const VERSION = getVersion();
 
 export interface HeartbeatParams {
   entity: string;

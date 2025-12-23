@@ -287,3 +287,5 @@ export const plugin: Plugin = async (ctx) => {
 
   return hooks;
 };
+
+export default plugin;

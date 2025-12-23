@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pluginDir = join(homedir(), ".config", "opencode", "plugin");
-const source = join(__dirname, "..", "dist", "index.js");
+const source = join(__dirname, "..", "dist", "bundle.js");
 const target = join(pluginDir, "wakatime.js");
 const packageJson = join(__dirname, "..", "package.json");
 
