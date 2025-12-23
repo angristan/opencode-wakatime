@@ -1,9 +1,10 @@
 import { type ExecFileOptions, execFile } from "node:child_process";
 import * as os from "node:os";
+import pkg from "../package.json" with { type: "json" };
 import { dependencies } from "./dependencies.js";
 import { logger } from "./logger.js";
 
-const VERSION = "1.0.0";
+const VERSION = pkg.version;
 
 export interface HeartbeatParams {
   entity: string;
