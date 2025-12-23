@@ -9,6 +9,9 @@ WakaTime plugin for [OpenCode](https://github.com/sst/opencode) - Track your AI 
 
 Inspired by [claude-code-wakatime](https://github.com/wakatime/claude-code-wakatime).
 
+> [!TIP]
+> Also check out [codex-wakatime](https://github.com/angristan/codex-wakatime) for OpenAI Codex CLI!
+
 ## Features
 
 - **Automatic CLI management** - Downloads and updates wakatime-cli automatically
@@ -101,20 +104,20 @@ flowchart TB
 
 ### Hooks Used
 
-| Hook | Purpose |
-|------|---------|
-| `tool.execute.after` | Tracks file modifications from tools |
-| `chat.message` | Triggers heartbeat processing on activity |
-| `event` | Listens for session lifecycle events |
+| Hook                 | Purpose                                   |
+| -------------------- | ----------------------------------------- |
+| `tool.execute.after` | Tracks file modifications from tools      |
+| `chat.message`       | Triggers heartbeat processing on activity |
+| `event`              | Listens for session lifecycle events      |
 
 ### Tool Tracking
 
-| Tool | Data Extracted |
-|------|----------------|
-| `edit` | File path, additions, deletions (from `filediff`) |
-| `write` | File path, new file detection |
-| `patch` | File paths from output, diff count |
-| `multiedit` | File paths and changes from each edit result |
+| Tool        | Data Extracted                                    |
+| ----------- | ------------------------------------------------- |
+| `edit`      | File path, additions, deletions (from `filediff`) |
+| `write`     | File path, new file detection                     |
+| `patch`     | File paths from output, diff count                |
+| `multiedit` | File paths and changes from each edit result      |
 
 ### Heartbeat Data
 
@@ -128,12 +131,12 @@ Each heartbeat includes:
 
 ## Files
 
-| File | Purpose |
-|------|---------|
-| `~/.wakatime/opencode.log` | Debug logs |
-| `~/.wakatime/opencode.json` | State (last heartbeat timestamp) |
-| `~/.wakatime/opencode-cli-state.json` | CLI version tracking |
-| `~/.wakatime/wakatime-cli-*` | Auto-downloaded CLI binary |
+| File                                  | Purpose                          |
+| ------------------------------------- | -------------------------------- |
+| `~/.wakatime/opencode.log`            | Debug logs                       |
+| `~/.wakatime/opencode.json`           | State (last heartbeat timestamp) |
+| `~/.wakatime/opencode-cli-state.json` | CLI version tracking             |
+| `~/.wakatime/wakatime-cli-*`          | Auto-downloaded CLI binary       |
 
 ## Development
 
