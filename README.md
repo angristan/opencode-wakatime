@@ -1,5 +1,10 @@
 # opencode-wakatime
 
+[![npm version](https://img.shields.io/npm/v/opencode-wakatime)](https://www.npmjs.com/package/opencode-wakatime)
+[![npm downloads](https://img.shields.io/npm/dm/opencode-wakatime)](https://www.npmjs.com/package/opencode-wakatime)
+[![CI](https://github.com/angristan/opencode-wakatime/actions/workflows/workflow.yml/badge.svg)](https://github.com/angristan/opencode-wakatime/actions/workflows/workflow.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 WakaTime plugin for [OpenCode](https://github.com/sst/opencode) - Track your AI coding activity, lines of code, and time spent.
 
 Inspired by [claude-code-wakatime](https://github.com/wakatime/claude-code-wakatime).
