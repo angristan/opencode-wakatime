@@ -1,0 +1,11 @@
+# 1.0.0 (2025-12-23)
+
+
+### Bug Fixes
+
+* update OpenCode repository link ([b96d829](https://github.com/angristan/opencode-wakatime/commit/b96d8297077a46d70ab14ad0e0de8dbb819a931f))
+
+
+### Features
+
+* add CLI for npm-based installation ([6868ece](https://github.com/angristan/opencode-wakatime/commit/6868ece59da15368be5d1f59dc1c1539017795d1))
