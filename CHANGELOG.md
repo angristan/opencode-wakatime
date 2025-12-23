@@ -1,3 +1,10 @@
+## [1.0.2](https://github.com/angristan/opencode-wakatime/compare/v1.0.1...v1.0.2) (2025-12-23)
+
+
+### Bug Fixes
+
+* ensure plugin works with Bun runtime ([07b419f](https://github.com/angristan/opencode-wakatime/commit/07b419f0edc9b8efe610d39f7bcb35b27b117ff3))
+
 ## [1.0.1](https://github.com/angristan/opencode-wakatime/compare/v1.0.0...v1.0.1) (2025-12-23)
 
 
