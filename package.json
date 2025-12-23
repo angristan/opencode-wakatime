@@ -5,7 +5,7 @@
     "type": "git",
     "url": "https://github.com/angristan/opencode-wakatime.git"
   },
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "WakaTime plugin for OpenCode - Track AI coding activity and time spent",
   "type": "module",
   "main": "dist/index.js",

@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/angristan/opencode-wakatime/compare/v1.0.2...v1.1.0) (2025-12-23)
+
+
+### Features
+
+* track file reads as coding activity ([558fbbe](https://github.com/angristan/opencode-wakatime/commit/558fbbeb577d333029b022a6f59aa41450ce22e6))
+
 ## [1.0.2](https://github.com/angristan/opencode-wakatime/compare/v1.0.1...v1.0.2) (2025-12-23)
 
 
