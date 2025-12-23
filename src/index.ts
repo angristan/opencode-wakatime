@@ -36,6 +36,7 @@ export function extractFileChanges(
   tool: string,
   metadata: Record<string, unknown> | undefined,
   output: string,
+  title?: string,
 ): Array<{ file: string; info: Partial<FileChangeInfo> }> {
   const changes: Array<{ file: string; info: Partial<FileChangeInfo> }> = [];
 
@@ -140,8 +141,13 @@ export function extractFileChanges(
     }
 
     case "read": {
-      // Read tool only returns 'preview' in metadata, not the file path
-      // Skip tracking reads as we can't reliably get the file path
+      // Read tool - title contains the file path
+      if (title) {
+        changes.push({
+          file: title,
+          info: { additions: 0, deletions: 0, isWrite: false },
+        });
+      }
       break;
     }
 
@@ -250,6 +256,7 @@ export const plugin: Plugin = async (ctx) => {
         tool,
         metadata as Record<string, unknown>,
         output.output,
+        title,
       );
 
       for (const change of changes) {

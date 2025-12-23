@@ -216,7 +216,20 @@ describe("extractFileChanges", () => {
   });
 
   describe("read tool", () => {
-    it("returns empty array (reads are not tracked)", () => {
+    it("extracts file path from title", () => {
+      const metadata = { preview: "file content preview" };
+      const title = "/path/to/file.ts";
+
+      const result = extractFileChanges("read", metadata, "", title);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].file).toBe("/path/to/file.ts");
+      expect(result[0].info.additions).toBe(0);
+      expect(result[0].info.deletions).toBe(0);
+      expect(result[0].info.isWrite).toBe(false);
+    });
+
+    it("returns empty array when no title provided", () => {
       const metadata = { preview: "file content preview" };
 
       const result = extractFileChanges("read", metadata, "");
