@@ -15,7 +15,7 @@ Inspired by [claude-code-wakatime](https://github.com/wakatime/claude-code-wakat
 ## Features
 
 - **Automatic CLI management** - Downloads and updates wakatime-cli automatically
-- **Detailed file tracking** - Tracks additions/deletions from edit, write, patch, and multiedit tools
+- **Detailed file tracking** - Tracks file reads and modifications (edit, write, patch, multiedit)
 - **AI coding metrics** - Sends `--ai-line-changes` for WakaTime AI coding analytics
 - **Rate-limited heartbeats** - 1 per minute to avoid API spam
 - **Session lifecycle** - Sends final heartbeat on session idle/end
@@ -77,7 +77,7 @@ The plugin hooks into OpenCode's event system:
 ```mermaid
 flowchart TB
     subgraph OpenCode["OpenCode"]
-        A[Tool Execution<br/>edit, write, patch, multiedit] --> H1[tool.execute.after]
+        A[Tool Execution<br/>read, edit, write, patch, multiedit] --> H1[tool.execute.after]
         B[Chat Activity] --> H2[chat.message]
         C[Session Events<br/>idle, end] --> H3[event]
     end
@@ -114,6 +114,7 @@ flowchart TB
 
 | Tool        | Data Extracted                                    |
 | ----------- | ------------------------------------------------- |
+| `read`      | File path (from title)                            |
 | `edit`      | File path, additions, deletions (from `filediff`) |
 | `write`     | File path, new file detection                     |
 | `patch`     | File paths from output, diff count                |
