@@ -40,17 +40,24 @@ Download from [WakaTime releases](https://github.com/wakatime/wakatime-cli/relea
 
 ## Installation
 
-Clone, build, and symlink the plugin:
+### Via npm (recommended)
 
 ```bash
-# Clone and build
+npm i -g opencode-wakatime
+opencode-wakatime --install
+```
+
+This installs the plugin to `~/.config/opencode/plugin/wakatime.js`.
+
+To update, run the same commands again.
+
+### From source
+
+```bash
 git clone https://github.com/angristan/opencode-wakatime
 cd opencode-wakatime
 npm install && npm run build
-
-# Symlink to global plugin directory
-mkdir -p ~/.config/opencode/plugin
-ln -s "$(pwd)/dist/index.js" ~/.config/opencode/plugin/wakatime.js
+node bin/cli.js --install
 ```
 
 The plugin will be automatically loaded by OpenCode - no configuration needed.
