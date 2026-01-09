@@ -1,3 +1,13 @@
+## [1.1.1](https://github.com/angristan/opencode-wakatime/compare/v1.1.0...v1.1.1) (2026-01-09)
+
+
+### Bug Fixes
+
+* await heartbeats on shutdown to prevent data loss ([bf30005](https://github.com/angristan/opencode-wakatime/commit/bf30005c3a864f7a484e5547b8abd9c9bdf89bc3))
+* inline version at build time for correct reporting ([31c1f4c](https://github.com/angristan/opencode-wakatime/commit/31c1f4ce651a6311cdfc8380806b81a63746b772))
+* track batch tool operations via message.part.updated event ([283070d](https://github.com/angristan/opencode-wakatime/commit/283070d36197b8c4312731caf8127e1c51daaffc))
+* use project-specific state files for rate limiting ([75df507](https://github.com/angristan/opencode-wakatime/commit/75df50704decb337456653a101f298b690eb2784))
+
 # [1.1.0](https://github.com/angristan/opencode-wakatime/compare/v1.0.2...v1.1.0) (2025-12-23)
 
 
