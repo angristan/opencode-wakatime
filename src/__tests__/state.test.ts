@@ -1,3 +1,4 @@
+import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -12,6 +13,7 @@ vi.mock("node:os", () => ({
 
 // Import after mocks are set up
 const {
+  initState,
   readState,
   shouldSendHeartbeat,
   timestamp,
@@ -20,13 +22,67 @@ const {
 } = await import("../state.js");
 
 describe("state", () => {
+  // Compute expected hash for test project folder
+  const testProjectFolder = "/home/user/projects/myapp";
+  const expectedHash = crypto
+    .createHash("md5")
+    .update(testProjectFolder)
+    .digest("hex")
+    .slice(0, 8);
+  const expectedStateFile = path.join(
+    "/home/user",
+    ".wakatime",
+    `opencode-${expectedHash}.json`,
+  );
+
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(os.homedir).mockReturnValue("/home/user");
+    // Initialize state with test project folder for consistent file path
+    initState(testProjectFolder);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  describe("initState", () => {
+    it("creates project-specific state file path", () => {
+      const projectFolder = "/home/user/projects/another-app";
+      initState(projectFolder);
+
+      const hash = crypto
+        .createHash("md5")
+        .update(projectFolder)
+        .digest("hex")
+        .slice(0, 8);
+
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        JSON.stringify({ lastHeartbeatAt: 1700000000 }),
+      );
+
+      readState();
+
+      expect(fs.readFileSync).toHaveBeenCalledWith(
+        path.join("/home/user", ".wakatime", `opencode-${hash}.json`),
+        "utf-8",
+      );
+    });
+
+    it("produces different paths for different projects", () => {
+      const calls: string[] = [];
+      vi.mocked(fs.readFileSync).mockImplementation((filePath) => {
+        calls.push(filePath as string);
+        return JSON.stringify({ lastHeartbeatAt: 1700000000 });
+      });
+
+      initState("/project/a");
+      readState();
+      initState("/project/b");
+      readState();
+
+      expect(calls[0]).not.toBe(calls[1]);
+    });
   });
 
   describe("timestamp", () => {
@@ -56,10 +112,7 @@ describe("state", () => {
       const result = readState();
 
       expect(result).toEqual(mockState);
-      expect(fs.readFileSync).toHaveBeenCalledWith(
-        path.join("/home/user", ".wakatime", "opencode.json"),
-        "utf-8",
-      );
+      expect(fs.readFileSync).toHaveBeenCalledWith(expectedStateFile, "utf-8");
     });
 
     it("returns empty object when file does not exist", () => {
@@ -89,7 +142,7 @@ describe("state", () => {
       writeState(mockState);
 
       expect(fs.writeFileSync).toHaveBeenCalledWith(
-        path.join("/home/user", ".wakatime", "opencode.json"),
+        expectedStateFile,
         JSON.stringify(mockState, null, 2),
       );
     });

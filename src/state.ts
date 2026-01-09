@@ -1,16 +1,34 @@
+import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-const STATE_FILE = path.join(os.homedir(), ".wakatime", "opencode.json");
+const STATE_DIR = path.join(os.homedir(), ".wakatime");
 
 export interface State {
   lastHeartbeatAt?: number;
 }
 
+// Project-specific state file path (set via initState)
+let stateFile = path.join(STATE_DIR, "opencode.json");
+
+/**
+ * Initialize state with a project-specific identifier.
+ * Creates a hash of the project folder to isolate rate limiting per project.
+ */
+export function initState(projectFolder: string): void {
+  // Create a short hash of the project folder for the state file name
+  const hash = crypto
+    .createHash("md5")
+    .update(projectFolder)
+    .digest("hex")
+    .slice(0, 8);
+  stateFile = path.join(STATE_DIR, `opencode-${hash}.json`);
+}
+
 export function readState(): State {
   try {
-    const content = fs.readFileSync(STATE_FILE, "utf-8");
+    const content = fs.readFileSync(stateFile, "utf-8");
     return JSON.parse(content) as State;
   } catch {
     return {};
@@ -19,11 +37,11 @@ export function readState(): State {
 
 export function writeState(state: State): void {
   try {
-    const dir = path.dirname(STATE_FILE);
+    const dir = path.dirname(stateFile);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+    fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
   } catch {
     // Silently ignore state write errors
   }
