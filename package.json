@@ -25,7 +25,7 @@
   },
   "scripts": {
     "build": "tsc && npm run bundle",
-    "bundle": "esbuild src/index.ts --bundle --platform=node --format=esm --external:@opencode-ai/plugin --outfile=dist/bundle.js",
+    "bundle": "node scripts/bundle.js",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint .",
     "format": "biome format .",
