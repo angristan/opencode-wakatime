@@ -1,8 +1,53 @@
 import * as path from "node:path";
 import type { Hooks, Plugin } from "@opencode-ai/plugin";
 import { logger } from "./logger.js";
-import { shouldSendHeartbeat, updateLastHeartbeat } from "./state.js";
+import {
+  initState,
+  shouldSendHeartbeat,
+  updateLastHeartbeat,
+} from "./state.js";
 import { ensureCliInstalled, sendHeartbeat } from "./wakatime.js";
+
+/**
+ * Type definitions for OpenCode SDK event parts
+ */
+interface ToolStateCompleted {
+  status: "completed";
+  input: Record<string, unknown>;
+  output: string;
+  title: string;
+  metadata: Record<string, unknown>;
+  time: { start: number; end: number };
+}
+
+interface ToolPart {
+  id: string;
+  sessionID: string;
+  messageID: string;
+  type: "tool";
+  callID: string;
+  tool: string;
+  state: { status: string } & Partial<ToolStateCompleted>;
+}
+
+interface MessagePartUpdatedEvent {
+  type: "message.part.updated";
+  properties: {
+    part: ToolPart | { type: string };
+  };
+}
+
+/**
+ * Type guard to check if an event is a MessagePartUpdatedEvent
+ */
+function isMessagePartUpdatedEvent(event: {
+  type: string;
+}): event is MessagePartUpdatedEvent {
+  return event.type === "message.part.updated";
+}
+
+// Set of processed callIDs to avoid duplicate processing
+const processedCallIds = new Set<string>();
 
 /**
  * Represents tracked changes for a single file
@@ -152,7 +197,8 @@ export function extractFileChanges(
     }
 
     case "glob":
-    case "grep": {
+    case "grep":
+    case "codesearch": {
       // Search tools - might indicate files being worked on
       // Don't track these as they don't modify files
       break;
@@ -169,9 +215,13 @@ export function extractFileChanges(
 }
 
 /**
- * Process and send heartbeats for tracked file changes
+ * Process and send heartbeats for tracked file changes.
+ * When force is true, awaits all heartbeats to ensure they complete before shutdown.
  */
-function processHeartbeat(projectFolder: string, force: boolean = false): void {
+async function processHeartbeat(
+  projectFolder: string,
+  force: boolean = false,
+): Promise<void> {
   if (!shouldSendHeartbeat(force) && !force) {
     logger.debug("Skipping heartbeat (rate limited)");
     return;
@@ -182,16 +232,25 @@ function processHeartbeat(projectFolder: string, force: boolean = false): void {
     return;
   }
 
+  // Collect all heartbeat promises
+  const heartbeatPromises: Promise<void>[] = [];
+
   // Send heartbeat for each file that was modified
   for (const [file, info] of fileChanges.entries()) {
     const lineChanges = info.additions - info.deletions;
-    sendHeartbeat({
+    const promise = sendHeartbeat({
       entity: file,
       projectFolder,
       lineChanges,
       category: "ai coding",
       isWrite: info.isWrite,
     });
+
+    if (force) {
+      // When forcing (shutdown), collect promises to await
+      heartbeatPromises.push(promise);
+    }
+
     logger.debug(
       `Sent heartbeat for ${file}: +${info.additions}/-${info.deletions} lines`,
     );
@@ -200,6 +259,15 @@ function processHeartbeat(projectFolder: string, force: boolean = false): void {
   // Clear tracked changes and update state
   fileChanges.clear();
   updateLastHeartbeat();
+
+  // On shutdown, wait for all heartbeats to complete
+  if (force && heartbeatPromises.length > 0) {
+    logger.debug(
+      `Waiting for ${heartbeatPromises.length} heartbeats to complete...`,
+    );
+    await Promise.all(heartbeatPromises);
+    logger.debug("All heartbeats completed");
+  }
 }
 
 /**
@@ -227,6 +295,12 @@ export const plugin: Plugin = async (ctx) => {
   // Derive project name from worktree path
   const projectName = path.basename(worktree || project.worktree);
 
+  // Determine project folder
+  const projectFolder = worktree || process.cwd();
+
+  // Initialize project-specific state for rate limiting
+  initState(projectFolder);
+
   // Ensure wakatime-cli is installed (will auto-download if needed)
   const cliInstalled = await ensureCliInstalled();
 
@@ -240,54 +314,76 @@ export const plugin: Plugin = async (ctx) => {
     );
   }
 
-  // Determine project folder
-  const projectFolder = worktree || process.cwd();
-
   const hooks: Hooks = {
-    // Track tool executions that modify files
-    "tool.execute.after": async (input, output) => {
-      const { tool } = input;
-      const { metadata, title } = output;
-
-      logger.debug(`Tool executed: ${tool} - ${title}`);
-
-      // Extract file changes from tool metadata
-      const changes = extractFileChanges(
-        tool,
-        metadata as Record<string, unknown>,
-        output.output,
-        title,
-      );
-
-      for (const change of changes) {
-        trackFileChange(change.file, change.info);
-        logger.debug(
-          `Tracked: ${change.file} (+${change.info.additions ?? 0}/-${change.info.deletions ?? 0})`,
-        );
-      }
-
-      // Try to send heartbeat (will be rate-limited)
-      if (changes.length > 0) {
-        processHeartbeat(projectFolder);
-      }
-    },
-
     // Track chat activity
     "chat.message": async (_input, _output) => {
       logger.debug("Chat message received");
 
       // If we have pending file changes, try to send heartbeat
       if (fileChanges.size > 0) {
-        processHeartbeat(projectFolder);
+        await processHeartbeat(projectFolder);
       }
     },
 
-    // Listen to all events for session lifecycle
+    // Listen to all events for tool execution and session lifecycle
+    // Using message.part.updated captures both regular tool calls AND
+    // tools executed via the batch tool
     event: async ({ event }) => {
+      // Track completed tool executions via message.part.updated
+      if (isMessagePartUpdatedEvent(event)) {
+        const { part } = event.properties;
+
+        // Only process tool parts
+        if (part.type !== "tool") return;
+
+        const toolPart = part as ToolPart;
+
+        // Only process completed tools
+        if (toolPart.state.status !== "completed") return;
+
+        // Avoid duplicate processing (tools can emit multiple updates)
+        if (processedCallIds.has(toolPart.callID)) return;
+        processedCallIds.add(toolPart.callID);
+
+        // Clean up old callIds periodically (keep last 1000)
+        if (processedCallIds.size > 1000) {
+          const idsArray = Array.from(processedCallIds);
+          for (let i = 0; i < 500; i++) {
+            processedCallIds.delete(idsArray[i]);
+          }
+        }
+
+        const { tool } = toolPart;
+        const state = toolPart.state as ToolStateCompleted;
+        const { metadata, title, output } = state;
+
+        logger.debug(`Tool executed: ${tool} - ${title}`);
+
+        // Extract file changes from tool metadata
+        const changes = extractFileChanges(
+          tool,
+          metadata as Record<string, unknown>,
+          output,
+          title,
+        );
+
+        for (const change of changes) {
+          trackFileChange(change.file, change.info);
+          logger.debug(
+            `Tracked: ${change.file} (+${change.info.additions ?? 0}/-${change.info.deletions ?? 0})`,
+          );
+        }
+
+        // Try to send heartbeat (will be rate-limited)
+        if (changes.length > 0) {
+          await processHeartbeat(projectFolder);
+        }
+      }
+
       // Send final heartbeat on session completion or idle
       if (event.type === "session.deleted" || event.type === "session.idle") {
         logger.debug(`Session event: ${event.type} - sending final heartbeat`);
-        processHeartbeat(projectFolder, true); // Force send
+        await processHeartbeat(projectFolder, true); // Force send and await
       }
     },
   };

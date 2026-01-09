@@ -258,6 +258,16 @@ describe("extractFileChanges", () => {
     });
   });
 
+  describe("codesearch tool", () => {
+    it("returns empty array (search tools are not tracked)", () => {
+      const metadata = { query: "function" };
+
+      const result = extractFileChanges("codesearch", metadata, "");
+
+      expect(result).toEqual([]);
+    });
+  });
+
   describe("bash tool", () => {
     it("returns empty array (bash commands are not tracked)", () => {
       const metadata = { command: "npm install" };
