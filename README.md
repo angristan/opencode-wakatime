@@ -17,8 +17,9 @@ Inspired by [claude-code-wakatime](https://github.com/wakatime/claude-code-wakat
 - **Automatic CLI management** - Downloads and updates wakatime-cli automatically
 - **Detailed file tracking** - Tracks file reads and modifications (edit, write, patch, multiedit)
 - **AI coding metrics** - Sends `--ai-line-changes` for WakaTime AI coding analytics
-- **Rate-limited heartbeats** - 1 per minute to avoid API spam
+- **Rate-limited heartbeats** - 1 per minute per project to avoid API spam
 - **Session lifecycle** - Sends final heartbeat on session idle/end
+- **Batch tool support** - Tracks file operations executed via batch tool
 
 ## Prerequisites
 
@@ -77,7 +78,7 @@ The plugin hooks into OpenCode's event system:
 ```mermaid
 flowchart TB
     subgraph OpenCode["OpenCode"]
-        A[Tool Execution<br/>read, edit, write, patch, multiedit] --> H1[tool.execute.after]
+        A[Tool Execution<br/>read, edit, write, patch, multiedit, batch] --> H1[message.part.updated]
         B[Chat Activity] --> H2[chat.message]
         C[Session Events<br/>idle, end] --> H3[event]
     end
@@ -88,7 +89,7 @@ flowchart TB
 
         H2 -.->|triggers| P2[Process Queue]
         Q --> P2
-        P2 --> R[Rate Limiter<br/>1 per minute]
+        P2 --> R[Rate Limiter<br/>1 per minute per project]
 
         H3 --> P3[Flush Final<br/>Heartbeat]
         P3 --> R
@@ -104,11 +105,10 @@ flowchart TB
 
 ### Hooks Used
 
-| Hook                 | Purpose                                   |
-| -------------------- | ----------------------------------------- |
-| `tool.execute.after` | Tracks file modifications from tools      |
-| `chat.message`       | Triggers heartbeat processing on activity |
-| `event`              | Listens for session lifecycle events      |
+| Hook           | Purpose                                                          |
+| -------------- | ---------------------------------------------------------------- |
+| `event`        | Tracks tool completions via `message.part.updated` and session lifecycle |
+| `chat.message` | Triggers heartbeat processing on activity                        |
 
 ### Tool Tracking
 
@@ -119,6 +119,7 @@ flowchart TB
 | `write`     | File path, new file detection                     |
 | `patch`     | File paths from output, diff count                |
 | `multiedit` | File paths and changes from each edit result      |
+| `batch`     | Tracks all child tool operations                  |
 
 ### Heartbeat Data
 
@@ -132,12 +133,12 @@ Each heartbeat includes:
 
 ## Files
 
-| File                                  | Purpose                          |
-| ------------------------------------- | -------------------------------- |
-| `~/.wakatime/opencode.log`            | Debug logs                       |
-| `~/.wakatime/opencode.json`           | State (last heartbeat timestamp) |
-| `~/.wakatime/opencode-cli-state.json` | CLI version tracking             |
-| `~/.wakatime/wakatime-cli-*`          | Auto-downloaded CLI binary       |
+| File                                  | Purpose                                    |
+| ------------------------------------- | ------------------------------------------ |
+| `~/.wakatime/opencode.log`            | Debug logs                                 |
+| `~/.wakatime/opencode-{hash}.json`    | Per-project state (last heartbeat timestamp) |
+| `~/.wakatime/opencode-cli-state.json` | CLI version tracking                       |
+| `~/.wakatime/wakatime-cli-*`          | Auto-downloaded CLI binary                 |
 
 ## Development
 
