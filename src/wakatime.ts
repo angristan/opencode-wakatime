@@ -1,13 +1,24 @@
 import { type ExecFileOptions, execFile } from "node:child_process";
-import * as fs from "node:fs";
 import * as os from "node:os";
-import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import { dependencies } from "./dependencies.js";
 import { logger } from "./logger.js";
 
+// Version is inlined at build time by esbuild
+// Falls back to package.json version for development
+declare const __VERSION__: string | undefined;
+
 function getVersion(): string {
+  // Check for build-time injected version first
+  if (typeof __VERSION__ !== "undefined") {
+    return __VERSION__;
+  }
+
+  // Fallback for development: try to read from package.json
   try {
+    // Dynamic import to avoid bundling issues
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const { fileURLToPath } = require("node:url");
     const __dirname = path.dirname(fileURLToPath(import.meta.url));
     const pkg = JSON.parse(
       fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf-8"),
@@ -65,49 +76,58 @@ export async function ensureCliInstalled(): Promise<boolean> {
   }
 }
 
-export function sendHeartbeat(params: HeartbeatParams): void {
-  const cliLocation = dependencies.getCliLocation();
+/**
+ * Send a heartbeat to WakaTime.
+ * Returns a Promise that resolves when the heartbeat is sent.
+ */
+export function sendHeartbeat(params: HeartbeatParams): Promise<void> {
+  return new Promise((resolve) => {
+    const cliLocation = dependencies.getCliLocation();
 
-  if (!dependencies.isCliInstalled()) {
-    logger.warn("wakatime-cli not installed, skipping heartbeat");
-    return;
-  }
-
-  const args: string[] = [
-    "--entity",
-    params.entity,
-    "--entity-type",
-    "file",
-    "--category",
-    params.category ?? "ai coding",
-    "--plugin",
-    `opencode/1.0.0 opencode-wakatime/${VERSION}`,
-  ];
-
-  if (params.projectFolder) {
-    args.push("--project-folder", params.projectFolder);
-  }
-
-  if (params.lineChanges !== undefined && params.lineChanges !== 0) {
-    args.push("--ai-line-changes", params.lineChanges.toString());
-  }
-
-  if (params.isWrite) {
-    args.push("--write");
-  }
-
-  logger.debug(`Sending heartbeat: wakatime-cli ${formatArgs(args)}`);
-
-  const execOptions = buildExecOptions();
-  execFile(cliLocation, args, execOptions, (error, stdout, stderr) => {
-    const output =
-      (stdout?.toString().trim() ?? "") + (stderr?.toString().trim() ?? "");
-    if (output) {
-      logger.debug(`wakatime-cli output: ${output}`);
+    if (!dependencies.isCliInstalled()) {
+      logger.warn("wakatime-cli not installed, skipping heartbeat");
+      resolve();
+      return;
     }
-    if (error) {
-      logger.error(`wakatime-cli error: ${error.message}`);
+
+    const args: string[] = [
+      "--entity",
+      params.entity,
+      "--entity-type",
+      "file",
+      "--category",
+      params.category ?? "ai coding",
+      "--plugin",
+      `opencode/1.0.0 opencode-wakatime/${VERSION}`,
+    ];
+
+    if (params.projectFolder) {
+      args.push("--project-folder", params.projectFolder);
     }
+
+    if (params.lineChanges !== undefined && params.lineChanges !== 0) {
+      args.push("--ai-line-changes", params.lineChanges.toString());
+    }
+
+    if (params.isWrite) {
+      args.push("--write");
+    }
+
+    logger.debug(`Sending heartbeat: wakatime-cli ${formatArgs(args)}`);
+
+    const execOptions = buildExecOptions();
+    execFile(cliLocation, args, execOptions, (error, stdout, stderr) => {
+      const output =
+        (stdout?.toString().trim() ?? "") + (stderr?.toString().trim() ?? "");
+      if (output) {
+        logger.debug(`wakatime-cli output: ${output}`);
+      }
+      if (error) {
+        logger.error(`wakatime-cli error: ${error.message}`);
+      }
+      // Always resolve - we don't want heartbeat failures to break the plugin
+      resolve();
+    });
   });
 }
 
