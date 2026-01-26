@@ -36,7 +36,7 @@ You can get your API key from [WakaTime Settings](https://wakatime.com/settings/
 
 ### WakaTime CLI (Optional)
 
-The plugin will automatically download wakatime-cli if not found. However, you can also install it manually:
+In case of manual install, the plugin will automatically download wakatime-cli if not found. However, you can also install it yourself:
 
 **macOS:**
 
@@ -49,7 +49,18 @@ Download from [WakaTime releases](https://github.com/wakatime/wakatime-cli/relea
 
 ## Installation
 
-### Via npm (recommended)
+### Via opencode config (recommended)
+
+opencode.json:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["opencode-wakatime"]
+}
+```
+
+### Manually via npm
 
 ```bash
 npm i -g opencode-wakatime
