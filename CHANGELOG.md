@@ -1,3 +1,9 @@
+## [1.1.5](https://github.com/angristan/opencode-wakatime/compare/v1.1.4...v1.1.5) (2026-02-05)
+
+### Bug Fixes
+
+* **release:** show dependency updates in release notes ([b2ff9c2](https://github.com/angristan/opencode-wakatime/commit/b2ff9c208b60f18c878bac066a76e29cc9471216))
+
 ## [1.1.4](https://github.com/angristan/opencode-wakatime/compare/v1.1.3...v1.1.4) (2026-02-05)
 
 
