@@ -69,5 +69,8 @@
     "*.{ts,js,json}": [
       "biome check --write"
     ]
+  },
+  "overrides": {
+    "tar": ">=7.5.7"
   }
 }
