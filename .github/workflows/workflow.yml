@@ -122,7 +122,7 @@ jobs:
       - name: Build
         run: npm run build
       - name: Install semantic-release
-        run: npm install -D semantic-release @semantic-release/changelog @semantic-release/git
+        run: npm install -D semantic-release @semantic-release/changelog @semantic-release/git conventional-changelog-conventionalcommits
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

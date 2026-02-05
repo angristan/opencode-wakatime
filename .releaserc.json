@@ -4,6 +4,7 @@
     [
       "@semantic-release/commit-analyzer",
       {
+        "preset": "conventionalcommits",
         "releaseRules": [
           { "type": "build", "scope": "deps", "release": "patch" },
           { "type": "build", "scope": "deps-dev", "release": "patch" }
@@ -13,13 +14,13 @@
     [
       "@semantic-release/release-notes-generator",
       {
+        "preset": "conventionalcommits",
         "presetConfig": {
           "types": [
             { "type": "feat", "section": "Features" },
             { "type": "fix", "section": "Bug Fixes" },
             { "type": "perf", "section": "Performance Improvements" },
-            { "type": "build", "scope": "deps", "section": "Dependencies" },
-            { "type": "build", "scope": "deps-dev", "section": "Dependencies" }
+            { "type": "build", "section": "Dependencies", "hidden": false }
           ]
         }
       }
