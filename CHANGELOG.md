@@ -1,3 +1,10 @@
+## [1.1.2](https://github.com/angristan/opencode-wakatime/compare/v1.1.1...v1.1.2) (2026-02-05)
+
+
+### Bug Fixes
+
+* **release:** trigger patch releases for dependabot dependency updates ([d99f61e](https://github.com/angristan/opencode-wakatime/commit/d99f61e37df6ef383b47926858d96deee8f6aabb))
+
 ## [1.1.1](https://github.com/angristan/opencode-wakatime/compare/v1.1.0...v1.1.1) (2026-01-09)
 
 
