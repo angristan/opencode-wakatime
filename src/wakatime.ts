@@ -37,6 +37,8 @@ export interface HeartbeatParams {
   lineChanges?: number;
   category?: string;
   isWrite?: boolean;
+  opencodeVersion?: string;
+  opencodeClient?: string;
 }
 
 export function isWindows(): boolean {
@@ -90,6 +92,9 @@ export function sendHeartbeat(params: HeartbeatParams): Promise<void> {
       return;
     }
 
+    const client = params.opencodeClient || "cli";
+    const opencodeVersion = params.opencodeVersion || "unknown";
+
     const args: string[] = [
       "--entity",
       params.entity,
@@ -98,7 +103,7 @@ export function sendHeartbeat(params: HeartbeatParams): Promise<void> {
       "--category",
       params.category ?? "ai coding",
       "--plugin",
-      `opencode/1.0.0 opencode-wakatime/${VERSION}`,
+      `opencode-${client}/${opencodeVersion} opencode-wakatime/${VERSION}`,
     ];
 
     if (params.projectFolder) {

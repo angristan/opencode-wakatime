@@ -1,6 +1,8 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import type { Hooks, Plugin } from "@opencode-ai/plugin";
-import { logger } from "./logger.js";
+import { LogLevel, logger } from "./logger.js";
 import {
   initState,
   shouldSendHeartbeat,
@@ -61,6 +63,13 @@ export interface FileChangeInfo {
 
 // Track file changes within the current session
 const fileChanges = new Map<string, FileChangeInfo>();
+
+// Cache opencode version - written to a file so all plugin instances can share it
+const OPENCODE_VERSION_CACHE = path.join(
+  os.homedir(),
+  ".wakatime",
+  "opencode-version-cache.json",
+);
 
 /**
  * FileDiff structure from opencode's edit tool
@@ -220,6 +229,8 @@ export function extractFileChanges(
  */
 async function processHeartbeat(
   projectFolder: string,
+  opencodeVersion: string,
+  opencodeClient: string,
   force: boolean = false,
 ): Promise<void> {
   if (!shouldSendHeartbeat(force) && !force) {
@@ -244,6 +255,8 @@ async function processHeartbeat(
       lineChanges,
       category: "ai coding",
       isWrite: info.isWrite,
+      opencodeVersion,
+      opencodeClient,
     });
 
     if (force) {
@@ -290,13 +303,69 @@ function trackFileChange(file: string, info: Partial<FileChangeInfo>): void {
 }
 
 export const plugin: Plugin = async (ctx) => {
-  const { project, worktree } = ctx;
+  // Read debug setting from ~/.wakatime.cfg [settings] section
+  const wakatimeCfgPath = path.join(os.homedir(), ".wakatime.cfg");
+  try {
+    const cfg = fs.readFileSync(wakatimeCfgPath, "utf-8");
+    const debugMatch = cfg.match(/^\s*debug\s*=\s*true\s*$/m);
+    if (debugMatch) {
+      logger.setLevel(LogLevel.DEBUG);
+    }
+  } catch {
+    // Config file doesn't exist or can't be read, keep default INFO level
+  }
+
+  const { project, worktree, client } = ctx;
 
   // Derive project name from worktree path
   const projectName = path.basename(worktree || project.worktree);
 
   // Determine project folder
   const projectFolder = worktree || process.cwd();
+
+  // Detect opencode client type (cli, desktop, app) from environment
+  // Map "app" to "web" for a clearer plugin identifier
+  const rawClient = process.env.OPENCODE_CLIENT || "cli";
+  const opencodeClient = rawClient === "app" ? "web" : rawClient;
+
+  // Fetch opencode version from the server health endpoint
+  // Use the SDK client's internal HTTP client which bypasses server auth
+  // Cache to a file since the plugin is loaded as separate module instances
+  let opencodeVersion = "unknown";
+  try {
+    // Check file cache first (written by whichever instance succeeds first)
+    const cached = JSON.parse(fs.readFileSync(OPENCODE_VERSION_CACHE, "utf-8"));
+    // Cache is valid for 60 seconds
+    if (cached.version && Date.now() - cached.timestamp < 60_000) {
+      opencodeVersion = cached.version;
+    }
+  } catch {
+    // No cache or invalid — fetch from server
+  }
+  if (opencodeVersion === "unknown") {
+    try {
+      const httpClient =
+        (client as any).global._client ?? (client as any)._client;
+      const { data } = await httpClient.get({ url: "/global/health" });
+      if (data?.version) {
+        opencodeVersion = data.version;
+        try {
+          fs.writeFileSync(
+            OPENCODE_VERSION_CACHE,
+            JSON.stringify({ version: data.version, timestamp: Date.now() }),
+          );
+        } catch {
+          // Ignore write errors
+        }
+      }
+    } catch (err) {
+      logger.warn(`Could not fetch OpenCode version: ${err}`);
+    }
+  }
+
+  logger.debug(
+    `OpenCode client: ${opencodeClient}, version: ${opencodeVersion}`,
+  );
 
   // Initialize project-specific state for rate limiting
   initState(projectFolder);
@@ -321,7 +390,7 @@ export const plugin: Plugin = async (ctx) => {
 
       // If we have pending file changes, try to send heartbeat
       if (fileChanges.size > 0) {
-        await processHeartbeat(projectFolder);
+        await processHeartbeat(projectFolder, opencodeVersion, opencodeClient);
       }
     },
 
@@ -376,14 +445,23 @@ export const plugin: Plugin = async (ctx) => {
 
         // Try to send heartbeat (will be rate-limited)
         if (changes.length > 0) {
-          await processHeartbeat(projectFolder);
+          await processHeartbeat(
+            projectFolder,
+            opencodeVersion,
+            opencodeClient,
+          );
         }
       }
 
       // Send final heartbeat on session completion or idle
       if (event.type === "session.deleted" || event.type === "session.idle") {
         logger.debug(`Session event: ${event.type} - sending final heartbeat`);
-        await processHeartbeat(projectFolder, true); // Force send and await
+        await processHeartbeat(
+          projectFolder,
+          opencodeVersion,
+          opencodeClient,
+          true,
+        ); // Force send and await
       }
     },
   };

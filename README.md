@@ -140,16 +140,17 @@ Each heartbeat includes:
 - **Project folder**: Working directory
 - **AI line changes**: Net lines added/removed (`additions - deletions`)
 - **Category**: "ai coding"
-- **Plugin identifier**: `opencode/1.0.0 opencode-wakatime/1.0.0`
+- **Plugin identifier**: `opencode-<client>/<version> opencode-wakatime/<version>` (e.g. `opencode-desktop/1.1.53 opencode-wakatime/1.1.4`)
 
 ## Files
 
 | File                                  | Purpose                                    |
 | ------------------------------------- | ------------------------------------------ |
-| `~/.wakatime/opencode.log`            | Debug logs                                 |
-| `~/.wakatime/opencode-{hash}.json`    | Per-project state (last heartbeat timestamp) |
-| `~/.wakatime/opencode-cli-state.json` | CLI version tracking                       |
-| `~/.wakatime/wakatime-cli-*`          | Auto-downloaded CLI binary                 |
+| `~/.wakatime/opencode.log`                  | Debug logs (enabled via `debug=true` in `~/.wakatime.cfg`) |
+| `~/.wakatime/opencode-{hash}.json`          | Per-project state (last heartbeat timestamp) |
+| `~/.wakatime/opencode-cli-state.json`       | CLI version tracking                       |
+| `~/.wakatime/opencode-version-cache.json`   | Cached OpenCode server version             |
+| `~/.wakatime/wakatime-cli-*`                | Auto-downloaded CLI binary                 |
 
 ## Development
 
