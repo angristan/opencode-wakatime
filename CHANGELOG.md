@@ -1,3 +1,9 @@
+## [1.2.0](https://github.com/angristan/opencode-wakatime/compare/v1.1.5...v1.2.0) (2026-02-09)
+
+### Features
+
+* include opencode client type and version in --plugin flag ([f89bf62](https://github.com/angristan/opencode-wakatime/commit/f89bf6254cd83fe492cafde7aa3d72e8f97aa44d)), closes [#24](https://github.com/angristan/opencode-wakatime/issues/24)
+
 ## [1.1.5](https://github.com/angristan/opencode-wakatime/compare/v1.1.4...v1.1.5) (2026-02-05)
 
 ### Bug Fixes
