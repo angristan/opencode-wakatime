@@ -437,6 +437,16 @@ export const plugin: Plugin = async (ctx) => {
         );
 
         for (const change of changes) {
+          // Skip directories — they end up as "Other" in WakaTime
+          try {
+            if (fs.statSync(change.file).isDirectory()) {
+              logger.debug(`Skipping directory: ${change.file}`);
+              continue;
+            }
+          } catch {
+            // File may not exist (deleted/temp) — still track it
+          }
+
           trackFileChange(change.file, change.info);
           logger.debug(
             `Tracked: ${change.file} (+${change.info.additions ?? 0}/-${change.info.deletions ?? 0})`,
