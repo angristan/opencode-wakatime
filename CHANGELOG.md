@@ -1,3 +1,9 @@
+## [1.2.2](https://github.com/angristan/opencode-wakatime/compare/v1.2.1...v1.2.2) (2026-02-12)
+
+### Bug Fixes
+
+* skip directories from heartbeat tracking ([dd0f3f2](https://github.com/angristan/opencode-wakatime/commit/dd0f3f22aa4384c9b2b1e2aa0873060c578ba192))
+
 ## [1.2.1](https://github.com/angristan/opencode-wakatime/compare/v1.2.0...v1.2.1) (2026-02-12)
 
 ### Dependencies
