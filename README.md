@@ -32,7 +32,7 @@ Ensure you have a WakaTime API key configured in `~/.wakatime.cfg`:
 api_key = waka_your_api_key_here
 ```
 
-You can get your API key from [WakaTime Settings](https://wakatime.com/settings/api-key).
+You can get your API key from [WakaTime Settings](https://wakatime.com/api-key).
 
 ### WakaTime CLI (Optional)
 
