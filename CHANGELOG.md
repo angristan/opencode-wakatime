@@ -1,3 +1,10 @@
+## [1.2.3](https://github.com/angristan/opencode-wakatime/compare/v1.2.2...v1.2.3) (2026-02-20)
+
+### Dependencies
+
+* **deps-dev:** bump @biomejs/biome from 2.3.14 to 2.4.2 ([#36](https://github.com/angristan/opencode-wakatime/issues/36)) ([f87d9e7](https://github.com/angristan/opencode-wakatime/commit/f87d9e704193230640a665b3f09d23034a05f0b8))
+* **deps-dev:** bump @opencode-ai/plugin from 1.1.59 to 1.2.6 ([#37](https://github.com/angristan/opencode-wakatime/issues/37)) ([1a3116c](https://github.com/angristan/opencode-wakatime/commit/1a3116cf0e54b99bf08aa58a7f9ff967cc9e842e))
+
 ## [1.2.2](https://github.com/angristan/opencode-wakatime/compare/v1.2.1...v1.2.2) (2026-02-12)
 
 ### Bug Fixes
