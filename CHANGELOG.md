@@ -1,3 +1,9 @@
+## [1.2.4](https://github.com/angristan/opencode-wakatime/compare/v1.2.3...v1.2.4) (2026-02-23)
+
+### Dependencies
+
+* **deps:** bump tar and npm ([#39](https://github.com/angristan/opencode-wakatime/issues/39)) ([2bbbc37](https://github.com/angristan/opencode-wakatime/commit/2bbbc37d0887749b5b3974e61c56686c445bd5f7))
+
 ## [1.2.3](https://github.com/angristan/opencode-wakatime/compare/v1.2.2...v1.2.3) (2026-02-20)
 
 ### Dependencies
