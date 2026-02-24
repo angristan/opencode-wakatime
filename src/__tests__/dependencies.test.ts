@@ -18,9 +18,12 @@ const { Dependencies } = await import("../dependencies.js");
 
 describe("Dependencies", () => {
   let deps: InstanceType<typeof Dependencies>;
+  const originalEnv = process.env;
 
   beforeEach(() => {
     vi.resetAllMocks();
+    process.env = { ...originalEnv };
+    delete process.env.WAKATIME_HOME;
     vi.mocked(os.homedir).mockReturnValue("/home/user");
     vi.mocked(os.platform).mockReturnValue("darwin");
     vi.mocked(os.arch).mockReturnValue("x64");
@@ -32,6 +35,7 @@ describe("Dependencies", () => {
   });
 
   afterEach(() => {
+    process.env = originalEnv;
     vi.restoreAllMocks();
   });
 
@@ -118,6 +122,22 @@ describe("Dependencies", () => {
 
       expect(result).toBe(
         path.join("/home/user", ".wakatime", "wakatime-cli-windows-amd64.exe"),
+      );
+    });
+
+    it("uses WAKATIME_HOME for local CLI location when set", () => {
+      process.env.WAKATIME_HOME = "/custom/wakatime";
+      vi.mocked(os.platform).mockReturnValue("darwin");
+      vi.mocked(os.arch).mockReturnValue("arm64");
+      vi.mocked(child_process.execSync).mockImplementation(() => {
+        throw new Error("Command not found");
+      });
+      const customDeps = new Dependencies();
+
+      const result = customDeps.getCliLocation();
+
+      expect(result).toBe(
+        path.join("/custom/wakatime", "wakatime-cli-darwin-arm64"),
       );
     });
 

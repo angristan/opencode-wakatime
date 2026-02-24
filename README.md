@@ -25,7 +25,8 @@ Inspired by [claude-code-wakatime](https://github.com/wakatime/claude-code-wakat
 
 ### WakaTime API Key
 
-Ensure you have a WakaTime API key configured in `~/.wakatime.cfg`:
+Ensure you have a WakaTime API key configured in `~/.wakatime.cfg`
+(or `$WAKATIME_HOME/.wakatime.cfg` when `WAKATIME_HOME` is set):
 
 ```ini
 [settings]
@@ -144,13 +145,16 @@ Each heartbeat includes:
 
 ## Files
 
-| File                                  | Purpose                                    |
-| ------------------------------------- | ------------------------------------------ |
-| `~/.wakatime/opencode.log`                  | Debug logs (enabled via `debug=true` in `~/.wakatime.cfg`) |
-| `~/.wakatime/opencode-{hash}.json`          | Per-project state (last heartbeat timestamp) |
-| `~/.wakatime/opencode-cli-state.json`       | CLI version tracking                       |
-| `~/.wakatime/opencode-version-cache.json`   | Cached OpenCode server version             |
-| `~/.wakatime/wakatime-cli-*`                | Auto-downloaded CLI binary                 |
+By default, plugin files are stored in `~/.wakatime/`.
+When `WAKATIME_HOME` is set, the same files are stored in `$WAKATIME_HOME/`.
+
+| File                        | Purpose                                    |
+| --------------------------- | ------------------------------------------ |
+| `opencode.log`              | Debug logs (enabled via `debug=true` in `~/.wakatime.cfg`) |
+| `opencode-{hash}.json`      | Per-project state (last heartbeat timestamp) |
+| `opencode-cli-state.json`   | CLI version tracking                       |
+| `opencode-version-cache.json` | Cached OpenCode server version             |
+| `wakatime-cli-*`            | Auto-downloaded CLI binary                 |
 
 ## Development
 
@@ -178,11 +182,13 @@ npm run build
 1. Verify API key in `~/.wakatime.cfg`
 2. Check if wakatime-cli is working: `wakatime-cli --version`
 3. Enable debug logging and check `~/.wakatime/opencode.log`
+   (or `$WAKATIME_HOME/opencode.log` when set)
 
 ### CLI not downloading
 
 1. Check network connectivity
 2. Verify write permissions to `~/.wakatime/`
+   (or `$WAKATIME_HOME/` when set)
 3. Manually install: `brew install wakatime-cli`
 
 ## License

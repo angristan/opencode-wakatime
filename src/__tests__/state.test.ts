@@ -22,6 +22,8 @@ const {
 } = await import("../state.js");
 
 describe("state", () => {
+  const originalEnv = process.env;
+
   // Compute expected hash for test project folder
   const testProjectFolder = "/home/user/projects/myapp";
   const expectedHash = crypto
@@ -37,12 +39,15 @@ describe("state", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    process.env = { ...originalEnv };
+    delete process.env.WAKATIME_HOME;
     vi.mocked(os.homedir).mockReturnValue("/home/user");
     // Initialize state with test project folder for consistent file path
     initState(testProjectFolder);
   });
 
   afterEach(() => {
+    process.env = originalEnv;
     vi.restoreAllMocks();
   });
 
@@ -82,6 +87,29 @@ describe("state", () => {
       readState();
 
       expect(calls[0]).not.toBe(calls[1]);
+    });
+
+    it("uses WAKATIME_HOME when set", () => {
+      process.env.WAKATIME_HOME = "/custom/wakatime";
+      const projectFolder = "/home/user/projects/wakatime-home-project";
+      initState(projectFolder);
+
+      const hash = crypto
+        .createHash("md5")
+        .update(projectFolder)
+        .digest("hex")
+        .slice(0, 8);
+
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        JSON.stringify({ lastHeartbeatAt: 1700000000 }),
+      );
+
+      readState();
+
+      expect(fs.readFileSync).toHaveBeenCalledWith(
+        path.join("/custom/wakatime", `opencode-${hash}.json`),
+        "utf-8",
+      );
     });
   });
 

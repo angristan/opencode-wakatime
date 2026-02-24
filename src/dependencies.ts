@@ -5,6 +5,7 @@ import * as https from "node:https";
 import * as os from "node:os";
 import * as path from "node:path";
 import { logger } from "./logger.js";
+import { getWakatimeResourcesDir } from "./wakatime-paths.js";
 
 function whichSync(cmd: string): string | null {
   try {
@@ -39,7 +40,7 @@ export class Dependencies {
   private stateFile: string;
 
   constructor() {
-    this.resourcesLocation = path.join(os.homedir(), ".wakatime");
+    this.resourcesLocation = getWakatimeResourcesDir();
     this.stateFile = path.join(
       this.resourcesLocation,
       "opencode-cli-state.json",

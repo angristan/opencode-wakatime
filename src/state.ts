@@ -1,16 +1,14 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
-
-const STATE_DIR = path.join(os.homedir(), ".wakatime");
+import { getWakatimeResourcesDir } from "./wakatime-paths.js";
 
 export interface State {
   lastHeartbeatAt?: number;
 }
 
 // Project-specific state file path (set via initState)
-let stateFile = path.join(STATE_DIR, "opencode.json");
+let stateFile = path.join(getWakatimeResourcesDir(), "opencode.json");
 
 /**
  * Initialize state with a project-specific identifier.
@@ -23,7 +21,7 @@ export function initState(projectFolder: string): void {
     .update(projectFolder)
     .digest("hex")
     .slice(0, 8);
-  stateFile = path.join(STATE_DIR, `opencode-${hash}.json`);
+  stateFile = path.join(getWakatimeResourcesDir(), `opencode-${hash}.json`);
 }
 
 export function readState(): State {
