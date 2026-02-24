@@ -13,21 +13,18 @@ const {
 } = await import("../wakatime-paths.js");
 
 describe("wakatime-paths", () => {
-  const originalEnv = process.env;
-
   beforeEach(() => {
-    process.env = { ...originalEnv };
+    vi.unstubAllEnvs();
+    vi.stubEnv("WAKATIME_HOME", undefined);
     vi.mocked(os.homedir).mockReturnValue("/home/user");
   });
 
   afterEach(() => {
-    process.env = originalEnv;
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
   it("uses default home and .wakatime resources when WAKATIME_HOME is not set", () => {
-    delete process.env.WAKATIME_HOME;
-
     expect(getWakatimeHomeDir()).toBe("/home/user");
     expect(getWakatimeResourcesDir()).toBe(
       path.join("/home/user", ".wakatime"),
@@ -38,7 +35,7 @@ describe("wakatime-paths", () => {
   });
 
   it("uses WAKATIME_HOME directly for resources and config", () => {
-    process.env.WAKATIME_HOME = "/custom/wakatime";
+    vi.stubEnv("WAKATIME_HOME", "/custom/wakatime");
 
     expect(getWakatimeHomeDir()).toBe("/custom/wakatime");
     expect(getWakatimeResourcesDir()).toBe("/custom/wakatime");
@@ -48,7 +45,7 @@ describe("wakatime-paths", () => {
   });
 
   it("expands ~ in WAKATIME_HOME", () => {
-    process.env.WAKATIME_HOME = "~/waka-home";
+    vi.stubEnv("WAKATIME_HOME", "~/waka-home");
 
     expect(getWakatimeHomeDir()).toBe(path.join("/home/user", "waka-home"));
     expect(getWakatimeResourcesDir()).toBe(
@@ -57,7 +54,7 @@ describe("wakatime-paths", () => {
   });
 
   it("treats empty WAKATIME_HOME as unset", () => {
-    process.env.WAKATIME_HOME = "   ";
+    vi.stubEnv("WAKATIME_HOME", "   ");
 
     expect(getWakatimeHomeDir()).toBe("/home/user");
     expect(getWakatimeResourcesDir()).toBe(

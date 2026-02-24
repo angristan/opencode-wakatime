@@ -22,8 +22,6 @@ const {
 } = await import("../state.js");
 
 describe("state", () => {
-  const originalEnv = process.env;
-
   // Compute expected hash for test project folder
   const testProjectFolder = "/home/user/projects/myapp";
   const expectedHash = crypto
@@ -39,15 +37,15 @@ describe("state", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
-    process.env = { ...originalEnv };
-    delete process.env.WAKATIME_HOME;
+    vi.unstubAllEnvs();
+    vi.stubEnv("WAKATIME_HOME", undefined);
     vi.mocked(os.homedir).mockReturnValue("/home/user");
     // Initialize state with test project folder for consistent file path
     initState(testProjectFolder);
   });
 
   afterEach(() => {
-    process.env = originalEnv;
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -90,7 +88,7 @@ describe("state", () => {
     });
 
     it("uses WAKATIME_HOME when set", () => {
-      process.env.WAKATIME_HOME = "/custom/wakatime";
+      vi.stubEnv("WAKATIME_HOME", "/custom/wakatime");
       const projectFolder = "/home/user/projects/wakatime-home-project";
       initState(projectFolder);
 

@@ -18,12 +18,11 @@ const { Dependencies } = await import("../dependencies.js");
 
 describe("Dependencies", () => {
   let deps: InstanceType<typeof Dependencies>;
-  const originalEnv = process.env;
 
   beforeEach(() => {
     vi.resetAllMocks();
-    process.env = { ...originalEnv };
-    delete process.env.WAKATIME_HOME;
+    vi.unstubAllEnvs();
+    vi.stubEnv("WAKATIME_HOME", undefined);
     vi.mocked(os.homedir).mockReturnValue("/home/user");
     vi.mocked(os.platform).mockReturnValue("darwin");
     vi.mocked(os.arch).mockReturnValue("x64");
@@ -35,7 +34,7 @@ describe("Dependencies", () => {
   });
 
   afterEach(() => {
-    process.env = originalEnv;
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -126,7 +125,7 @@ describe("Dependencies", () => {
     });
 
     it("uses WAKATIME_HOME for local CLI location when set", () => {
-      process.env.WAKATIME_HOME = "/custom/wakatime";
+      vi.stubEnv("WAKATIME_HOME", "/custom/wakatime");
       vi.mocked(os.platform).mockReturnValue("darwin");
       vi.mocked(os.arch).mockReturnValue("arm64");
       vi.mocked(child_process.execSync).mockImplementation(() => {
