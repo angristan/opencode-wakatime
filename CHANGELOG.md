@@ -1,3 +1,14 @@
+## [1.2.5](https://github.com/angristan/opencode-wakatime/compare/v1.2.4...v1.2.5) (2026-03-01)
+
+### Dependencies
+
+* **deps-dev:** bump @biomejs/biome from 2.4.2 to 2.4.4 ([#46](https://github.com/angristan/opencode-wakatime/issues/46)) ([37eeddb](https://github.com/angristan/opencode-wakatime/commit/37eeddbf52f16bcdda1682d6d120e3db530af9fb))
+* **deps-dev:** bump @commitlint/cli from 20.4.1 to 20.4.2 ([#45](https://github.com/angristan/opencode-wakatime/issues/45)) ([21230a5](https://github.com/angristan/opencode-wakatime/commit/21230a563bb4db81fc037b941298cfd82a48dc3b))
+* **deps-dev:** bump @commitlint/config-conventional ([#42](https://github.com/angristan/opencode-wakatime/issues/42)) ([4b73be7](https://github.com/angristan/opencode-wakatime/commit/4b73be7c692bd47c9c78d2024866f10e5fc63992))
+* **deps-dev:** bump @opencode-ai/plugin from 1.2.6 to 1.2.14 ([#44](https://github.com/angristan/opencode-wakatime/issues/44)) ([3f52a9c](https://github.com/angristan/opencode-wakatime/commit/3f52a9c7cfb7ff8e843bd74259d7a7ec412a7f56))
+* **deps-dev:** bump @types/node from 25.2.3 to 25.3.0 ([#43](https://github.com/angristan/opencode-wakatime/issues/43)) ([b791eec](https://github.com/angristan/opencode-wakatime/commit/b791eec537319a1a406cdf6440e8460b7a5cd1ab))
+* **deps:** bump rollup from 4.56.0 to 4.59.0 ([#47](https://github.com/angristan/opencode-wakatime/issues/47)) ([2d1e828](https://github.com/angristan/opencode-wakatime/commit/2d1e8289823a30d0c7751ee5da7930552e8c12e8))
+
 ## [1.2.4](https://github.com/angristan/opencode-wakatime/compare/v1.2.3...v1.2.4) (2026-02-23)
 
 ### Dependencies
