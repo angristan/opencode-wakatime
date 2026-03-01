@@ -1,5 +1,4 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import type { Hooks, Plugin } from "@opencode-ai/plugin";
 import { LogLevel, logger } from "./logger.js";
@@ -9,6 +8,10 @@ import {
   updateLastHeartbeat,
 } from "./state.js";
 import { ensureCliInstalled, sendHeartbeat } from "./wakatime.js";
+import {
+  getWakatimeConfigFilePath,
+  getWakatimeResourcesDir,
+} from "./wakatime-paths.js";
 
 /**
  * Type definitions for OpenCode SDK event parts
@@ -66,8 +69,7 @@ const fileChanges = new Map<string, FileChangeInfo>();
 
 // Cache opencode version - written to a file so all plugin instances can share it
 const OPENCODE_VERSION_CACHE = path.join(
-  os.homedir(),
-  ".wakatime",
+  getWakatimeResourcesDir(),
   "opencode-version-cache.json",
 );
 
@@ -303,8 +305,8 @@ function trackFileChange(file: string, info: Partial<FileChangeInfo>): void {
 }
 
 export const plugin: Plugin = async (ctx) => {
-  // Read debug setting from ~/.wakatime.cfg [settings] section
-  const wakatimeCfgPath = path.join(os.homedir(), ".wakatime.cfg");
+  // Read debug setting from ~/.wakatime.cfg (or $WAKATIME_HOME/.wakatime.cfg)
+  const wakatimeCfgPath = getWakatimeConfigFilePath();
   try {
     const cfg = fs.readFileSync(wakatimeCfgPath, "utf-8");
     const debugMatch = cfg.match(/^\s*debug\s*=\s*true\s*$/m);

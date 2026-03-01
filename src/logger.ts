@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
+import { getWakatimeResourcesDir } from "./wakatime-paths.js";
 
 export enum LogLevel {
   DEBUG = 0,
@@ -9,7 +9,9 @@ export enum LogLevel {
   ERROR = 3,
 }
 
-const LOG_FILE = path.join(os.homedir(), ".wakatime", "opencode.log");
+function getLogFilePath(): string {
+  return path.join(getWakatimeResourcesDir(), "opencode.log");
+}
 
 export class Logger {
   private level: LogLevel = LogLevel.INFO;
@@ -52,11 +54,12 @@ export class Logger {
     const line = `[${timestamp}][${levelName}] ${msg}\n`;
 
     try {
-      const dir = path.dirname(LOG_FILE);
+      const logFile = getLogFilePath();
+      const dir = path.dirname(logFile);
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }
-      fs.appendFileSync(LOG_FILE, line);
+      fs.appendFileSync(logFile, line);
     } catch {
       // Silently ignore logging errors
     }

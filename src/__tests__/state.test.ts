@@ -37,12 +37,15 @@ describe("state", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.unstubAllEnvs();
+    vi.stubEnv("WAKATIME_HOME", undefined);
     vi.mocked(os.homedir).mockReturnValue("/home/user");
     // Initialize state with test project folder for consistent file path
     initState(testProjectFolder);
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -82,6 +85,29 @@ describe("state", () => {
       readState();
 
       expect(calls[0]).not.toBe(calls[1]);
+    });
+
+    it("uses WAKATIME_HOME when set", () => {
+      vi.stubEnv("WAKATIME_HOME", "/custom/wakatime");
+      const projectFolder = "/home/user/projects/wakatime-home-project";
+      initState(projectFolder);
+
+      const hash = crypto
+        .createHash("md5")
+        .update(projectFolder)
+        .digest("hex")
+        .slice(0, 8);
+
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        JSON.stringify({ lastHeartbeatAt: 1700000000 }),
+      );
+
+      readState();
+
+      expect(fs.readFileSync).toHaveBeenCalledWith(
+        path.join("/custom/wakatime", `opencode-${hash}.json`),
+        "utf-8",
+      );
     });
   });
 
