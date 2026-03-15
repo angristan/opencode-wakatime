@@ -1,3 +1,19 @@
+## [1.3.0](https://github.com/angristan/opencode-wakatime/compare/v1.2.5...v1.3.0) (2026-03-15)
+
+### Features
+
+* support WAKATIME_HOME like wakatime cli ([#41](https://github.com/angristan/opencode-wakatime/issues/41)) ([75429db](https://github.com/angristan/opencode-wakatime/commit/75429db5b2c17429d5c61ef8d7f8220d5142db0e))
+
+### Dependencies
+
+* **deps-dev:** bump @biomejs/biome from 2.4.4 to 2.4.5 ([#51](https://github.com/angristan/opencode-wakatime/issues/51)) ([ae3ce35](https://github.com/angristan/opencode-wakatime/commit/ae3ce3597be6eadf6bfc975522b989a1a0811756))
+* **deps-dev:** bump @commitlint/cli from 20.4.2 to 20.4.3 ([#49](https://github.com/angristan/opencode-wakatime/issues/49)) ([bc72026](https://github.com/angristan/opencode-wakatime/commit/bc72026617fe92a6fedfa89f452b58f0252fe4f9))
+* **deps-dev:** bump @commitlint/config-conventional ([#50](https://github.com/angristan/opencode-wakatime/issues/50)) ([e79f1d9](https://github.com/angristan/opencode-wakatime/commit/e79f1d9466e543ccf4ddd50e2b77467ccb87981b))
+* **deps-dev:** bump @types/node from 25.3.0 to 25.3.3 ([#52](https://github.com/angristan/opencode-wakatime/issues/52)) ([b4f0328](https://github.com/angristan/opencode-wakatime/commit/b4f032816326891ff69ed40ead00783b1db8c280))
+* **deps-dev:** bump conventional-changelog-conventionalcommits ([#48](https://github.com/angristan/opencode-wakatime/issues/48)) ([8a1a3dd](https://github.com/angristan/opencode-wakatime/commit/8a1a3dd661c7816aff6e66ecd0debe314f44ccee))
+* **deps-dev:** bump undici from 6.23.0 to 6.24.1 ([#55](https://github.com/angristan/opencode-wakatime/issues/55)) ([5b8e2b0](https://github.com/angristan/opencode-wakatime/commit/5b8e2b0d231b04e6eb1af2ff4683d2487bbcc5c9))
+* **deps:** bump tar and npm ([#53](https://github.com/angristan/opencode-wakatime/issues/53)) ([52f2eb7](https://github.com/angristan/opencode-wakatime/commit/52f2eb7029088a3882c10706850234c3530941dd))
+
 ## [1.2.5](https://github.com/angristan/opencode-wakatime/compare/v1.2.4...v1.2.5) (2026-03-01)
 
 ### Dependencies
