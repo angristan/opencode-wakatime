@@ -1,3 +1,13 @@
+## [1.3.1](https://github.com/angristan/opencode-wakatime/compare/v1.3.0...v1.3.1) (2026-04-23)
+
+### Dependencies
+
+* **deps-dev:** bump handlebars from 4.7.8 to 4.7.9 ([#62](https://github.com/angristan/opencode-wakatime/issues/62)) ([442e9da](https://github.com/angristan/opencode-wakatime/commit/442e9da8e7c694d105a356d3ebfbc604f0ee5059))
+* **deps-dev:** bump lodash-es from 4.17.23 to 4.18.1 ([#63](https://github.com/angristan/opencode-wakatime/issues/63)) ([f495152](https://github.com/angristan/opencode-wakatime/commit/f495152343aed26e4e930987eeb42025bcca20a2))
+* **deps-dev:** bump picomatch from 2.3.1 to 2.3.2 ([#61](https://github.com/angristan/opencode-wakatime/issues/61)) ([8c6b3d0](https://github.com/angristan/opencode-wakatime/commit/8c6b3d0b3a463e0ea1fe7dd34e018aa07ae1db56))
+* **deps:** bump lodash from 4.17.23 to 4.18.1 ([#65](https://github.com/angristan/opencode-wakatime/issues/65)) ([8ae90cd](https://github.com/angristan/opencode-wakatime/commit/8ae90cd385f101c85be62a040138d3a71c9ba207))
+* **deps:** bump vite from 7.3.1 to 7.3.2 ([#64](https://github.com/angristan/opencode-wakatime/issues/64)) ([098e4f6](https://github.com/angristan/opencode-wakatime/commit/098e4f6ec2f90b54b3adc7f3d127fce6c0687775))
+
 ## [1.3.0](https://github.com/angristan/opencode-wakatime/compare/v1.2.5...v1.3.0) (2026-03-15)
 
 ### Features
