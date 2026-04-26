@@ -1,3 +1,9 @@
+## [1.3.6](https://github.com/angristan/opencode-wakatime/compare/v1.3.5...v1.3.6) (2026-04-26)
+
+### Dependencies
+
+* **deps:** bump postcss to 8.5.10 ([#66](https://github.com/angristan/opencode-wakatime/issues/66)) ([f53ac42](https://github.com/angristan/opencode-wakatime/commit/f53ac4278ed85e5a6085a2d03d9a7c97e734c225))
+
 ## [1.3.5](https://github.com/angristan/opencode-wakatime/compare/v1.3.4...v1.3.5) (2026-04-26)
 
 ### Dependencies
