@@ -1,3 +1,9 @@
+## [1.3.4](https://github.com/angristan/opencode-wakatime/compare/v1.3.3...v1.3.4) (2026-04-26)
+
+### Dependencies
+
+* **deps-dev:** bump biome to 2.4.8 ([#58](https://github.com/angristan/opencode-wakatime/issues/58)) ([d66d97d](https://github.com/angristan/opencode-wakatime/commit/d66d97d13603a284f11049e533200c1ab9ae61bd))
+
 ## [1.3.3](https://github.com/angristan/opencode-wakatime/compare/v1.3.2...v1.3.3) (2026-04-26)
 
 ### Dependencies
