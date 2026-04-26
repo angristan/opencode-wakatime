@@ -1,3 +1,9 @@
+## [1.3.7](https://github.com/angristan/opencode-wakatime/compare/v1.3.6...v1.3.7) (2026-04-26)
+
+### Dependencies
+
+* **deps-dev:** bump vitest to 4.1.0 ([#59](https://github.com/angristan/opencode-wakatime/issues/59)) ([03d50c8](https://github.com/angristan/opencode-wakatime/commit/03d50c88086658a36dc559af42cea37dae299f52))
+
 ## [1.3.6](https://github.com/angristan/opencode-wakatime/compare/v1.3.5...v1.3.6) (2026-04-26)
 
 ### Dependencies
