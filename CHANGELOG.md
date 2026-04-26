@@ -1,3 +1,9 @@
+## [1.3.5](https://github.com/angristan/opencode-wakatime/compare/v1.3.4...v1.3.5) (2026-04-26)
+
+### Dependencies
+
+* **deps-dev:** bump types-node to 25.5.0 ([#60](https://github.com/angristan/opencode-wakatime/issues/60)) ([662164d](https://github.com/angristan/opencode-wakatime/commit/662164db8b53b744f2c8ccc3a5e0378010267974))
+
 ## [1.3.4](https://github.com/angristan/opencode-wakatime/compare/v1.3.3...v1.3.4) (2026-04-26)
 
 ### Dependencies
