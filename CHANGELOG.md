@@ -1,3 +1,9 @@
+## [1.3.2](https://github.com/angristan/opencode-wakatime/compare/v1.3.1...v1.3.2) (2026-04-26)
+
+### Dependencies
+
+* **deps-dev:** bump @commitlint/config-conventional from 20.4.3 to 20.5.0 ([#56](https://github.com/angristan/opencode-wakatime/issues/56)) ([2623d6a](https://github.com/angristan/opencode-wakatime/commit/2623d6ab153f904dd78db44c944b600eae16b81c))
+
 ## [1.3.1](https://github.com/angristan/opencode-wakatime/compare/v1.3.0...v1.3.1) (2026-04-23)
 
 ### Dependencies
