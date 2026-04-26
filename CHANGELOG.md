@@ -1,3 +1,9 @@
+## [1.3.3](https://github.com/angristan/opencode-wakatime/compare/v1.3.2...v1.3.3) (2026-04-26)
+
+### Dependencies
+
+* **deps-dev:** bump esbuild to 0.27.4 ([#57](https://github.com/angristan/opencode-wakatime/issues/57)) ([49cf469](https://github.com/angristan/opencode-wakatime/commit/49cf469f2337fbebe05e636560a21456c72ed82f))
+
 ## [1.3.2](https://github.com/angristan/opencode-wakatime/compare/v1.3.1...v1.3.2) (2026-04-26)
 
 ### Dependencies
