@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { copyFileSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
@@ -20,5 +20,7 @@ await build({
     __VERSION__: JSON.stringify(pkg.version),
   },
 });
+
+copyFileSync("src/tui.tsx", "dist/tui.tsx");
 
 console.log(`Bundled opencode-wakatime v${pkg.version}`);
