@@ -14,6 +14,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./tui": {
+      "types": "./dist/tui.d.ts",
+      "default": "./dist/tui.tsx"
     }
   },
   "files": [
@@ -23,6 +27,10 @@
   "bin": {
     "opencode-wakatime": "bin/cli.js"
   },
+  "oc-plugin": [
+    "server",
+    "tui"
+  ],
   "scripts": {
     "build": "tsc && npm run bundle",
     "bundle": "node scripts/bundle.js",
@@ -47,13 +55,13 @@
   "author": "",
   "license": "MIT",
   "peerDependencies": {
-    "@opencode-ai/plugin": ">=1.0.0"
+    "@opencode-ai/plugin": ">=1.4.8"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.8",
     "@commitlint/cli": "^20.0.0",
     "@commitlint/config-conventional": "^20.0.0",
-    "@opencode-ai/plugin": "^1.0.0",
+    "@opencode-ai/plugin": "1.4.8",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@types/node": "^25.0.3",
@@ -73,5 +81,9 @@
   },
   "overrides": {
     "tar": ">=7.5.7"
+  },
+  "dependencies": {
+    "@opentui/solid": "^0.1.104",
+    "solid-js": "1.9.11"
   }
 }

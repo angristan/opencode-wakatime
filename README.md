@@ -17,6 +17,7 @@ Inspired by [claude-code-wakatime](https://github.com/wakatime/claude-code-wakat
 - **Automatic CLI management** - Downloads and updates wakatime-cli automatically
 - **Detailed file tracking** - Tracks file reads and modifications (edit, write, patch, multiedit)
 - **AI coding metrics** - Sends `--ai-line-changes` for WakaTime AI coding analytics
+- **OpenCode HUD** - Displays today's WakaTime and AI Coding activity in the TUI sidebar
 - **Rate-limited heartbeats** - 1 per minute per project to avoid API spam
 - **Session lifecycle** - Sends final heartbeat on session idle/end
 - **Batch tool support** - Tracks file operations executed via batch tool
@@ -50,7 +51,15 @@ Download from [WakaTime releases](https://github.com/wakatime/wakatime-cli/relea
 
 ## Installation
 
-### Via opencode config (recommended)
+### Via opencode plugin command (recommended)
+
+```bash
+opencode plugin opencode-wakatime --global
+```
+
+This enables both the server heartbeat plugin and the TUI sidebar HUD.
+
+### Via opencode config
 
 opencode.json:
 
@@ -60,6 +69,8 @@ opencode.json:
   "plugin": ["opencode-wakatime"]
 }
 ```
+
+For the sidebar HUD, also add the plugin to `tui.json` or use the plugin command above.
 
 ### Manually via npm
 
