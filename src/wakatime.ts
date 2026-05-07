@@ -1,4 +1,4 @@
-import { type ExecFileOptions, execFile } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import * as os from "node:os";
 import { dependencies } from "./dependencies.js";
 import { logger } from "./logger.js";
@@ -31,6 +31,12 @@ function getVersion(): string {
 
 const VERSION = getVersion();
 
+// Default timeout for heartbeat processes (30 seconds)
+const DEFAULT_HEARTBEAT_TIMEOUT_MS = 30_000;
+
+// Track active heartbeat processes for cleanup
+const activeProcesses: Set<ChildProcess> = new Set();
+
 export interface HeartbeatParams {
   entity: string;
   projectFolder?: string;
@@ -45,8 +51,19 @@ export function isWindows(): boolean {
   return os.platform() === "win32";
 }
 
-export function buildExecOptions(): ExecFileOptions {
-  const options: ExecFileOptions = {
+export function buildExecOptions(): {
+  env?: NodeJS.ProcessEnv;
+  detached?: boolean;
+  stdio: "ignore";
+  windowsHide: boolean;
+} {
+  const options: {
+    env?: NodeJS.ProcessEnv;
+    detached?: boolean;
+    stdio: "ignore";
+    windowsHide: boolean;
+  } = {
+    stdio: "ignore",
     windowsHide: true,
   };
 
@@ -80,9 +97,20 @@ export async function ensureCliInstalled(): Promise<boolean> {
 
 /**
  * Send a heartbeat to WakaTime.
- * Returns a Promise that resolves when the heartbeat is sent.
+ *
+ * Uses spawn with stdio: 'ignore' and detached: true to avoid pipe buffer
+ * issues that can cause child processes to hang indefinitely.
+ *
+ * A timeout is set as a safety net — if the process exceeds the timeout,
+ * it will be killed to prevent resource leaks.
+ *
+ * @param params - Heartbeat parameters
+ * @param timeoutMs - Timeout in milliseconds (default: 30000)
  */
-export function sendHeartbeat(params: HeartbeatParams): Promise<void> {
+export function sendHeartbeat(
+  params: HeartbeatParams,
+  timeoutMs: number = DEFAULT_HEARTBEAT_TIMEOUT_MS,
+): Promise<void> {
   return new Promise((resolve) => {
     const cliLocation = dependencies.getCliLocation();
 
@@ -121,19 +149,70 @@ export function sendHeartbeat(params: HeartbeatParams): Promise<void> {
     logger.debug(`Sending heartbeat: wakatime-cli ${formatArgs(args)}`);
 
     const execOptions = buildExecOptions();
-    execFile(cliLocation, args, execOptions, (error, stdout, stderr) => {
-      const output =
-        (stdout?.toString().trim() ?? "") + (stderr?.toString().trim() ?? "");
-      if (output) {
-        logger.debug(`wakatime-cli output: ${output}`);
+    const child = spawn(cliLocation, args, execOptions);
+
+    // Track the process for cleanup
+    activeProcesses.add(child);
+
+    let resolved = false;
+    const resolveOnce = () => {
+      if (!resolved) {
+        resolved = true;
+        activeProcesses.delete(child);
+        clearTimeout(timeoutId);
+        resolve();
       }
-      if (error) {
-        logger.error(`wakatime-cli error: ${error.message}`);
+    };
+
+    // Safety timeout — kill the process if it hangs
+    const timeoutId = setTimeout(() => {
+      logger.warn(
+        `Heartbeat timed out after ${timeoutMs}ms for ${params.entity}, killing process`,
+      );
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        // Process may have already exited
       }
-      // Always resolve - we don't want heartbeat failures to break the plugin
-      resolve();
+      resolveOnce();
+    }, timeoutMs);
+
+    child.on("error", (error) => {
+      logger.error(`wakatime-cli spawn error: ${error.message}`);
+      resolveOnce();
+    });
+
+    child.on("exit", (code, signal) => {
+      if (code !== null && code !== 0) {
+        logger.warn(`wakatime-cli exited with code ${code}`);
+      } else if (signal) {
+        logger.debug(`wakatime-cli terminated by signal ${signal}`);
+      }
+      resolveOnce();
     });
   });
+}
+
+/**
+ * Kill all active heartbeat processes.
+ * Call this during plugin shutdown to clean up any lingering processes.
+ */
+export function cleanupHeartbeats(): void {
+  let killedCount = 0;
+  activeProcesses.forEach((child) => {
+    try {
+      if (!child.killed) {
+        child.kill("SIGTERM");
+        killedCount++;
+      }
+    } catch {
+      // Process may have already exited
+    }
+    activeProcesses.delete(child);
+  });
+  if (killedCount > 0) {
+    logger.info(`Cleaned up ${killedCount} active heartbeat processes`);
+  }
 }
 
 export function isCliAvailable(): boolean {
