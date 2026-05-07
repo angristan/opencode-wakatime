@@ -7,7 +7,11 @@ import {
   shouldSendHeartbeat,
   updateLastHeartbeat,
 } from "./state.js";
-import { ensureCliInstalled, sendHeartbeat } from "./wakatime.js";
+import {
+  cleanupHeartbeats,
+  ensureCliInstalled,
+  sendHeartbeat,
+} from "./wakatime.js";
 import {
   getWakatimeConfigFilePath,
   getWakatimeResourcesDir,
@@ -474,6 +478,8 @@ export const plugin: Plugin = async (ctx) => {
           opencodeClient,
           true,
         ); // Force send and await
+        // Clean up any lingering heartbeat processes
+        cleanupHeartbeats();
       }
     },
   };
