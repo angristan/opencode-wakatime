@@ -1,3 +1,9 @@
+## [1.3.8](https://github.com/angristan/opencode-wakatime/compare/v1.3.7...v1.3.8) (2026-05-13)
+
+### Bug Fixes
+
+* update vulnerable dev dependencies ([b068880](https://github.com/angristan/opencode-wakatime/commit/b068880b9939136412124c5083f31130f9776b06))
+
 ## [1.3.7](https://github.com/angristan/opencode-wakatime/compare/v1.3.6...v1.3.7) (2026-04-26)
 
 ### Dependencies
