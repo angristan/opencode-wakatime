@@ -1,3 +1,14 @@
+## [1.3.9](https://github.com/angristan/opencode-wakatime/compare/v1.3.8...v1.3.9) (2026-07-14)
+
+### Bug Fixes
+
+* batch wakatime heartbeats ([cdc1520](https://github.com/angristan/opencode-wakatime/commit/cdc15208fb85b409aba06f77bad9fcaef53cf904))
+* flush pending heartbeats on idle ([4231886](https://github.com/angristan/opencode-wakatime/commit/4231886ab781d372c185d8d9b9727023644fe02f))
+* kill heartbeats when opencode exits ([1840e5c](https://github.com/angristan/opencode-wakatime/commit/1840e5c04d45bc272b120ee35700aa762c25ea62))
+* prefer the opencode project worktree ([dda12a4](https://github.com/angristan/opencode-wakatime/commit/dda12a4617c9c224dd6ef1e157a4dd5387788634))
+* prevent wakatime-cli process leaks with timeout and cleanup ([0b6aa88](https://github.com/angristan/opencode-wakatime/commit/0b6aa88644403639c7cbc431abda76e5b1da95fe))
+* terminate timed out heartbeats reliably ([86befef](https://github.com/angristan/opencode-wakatime/commit/86befef8617cf0fca4cdf3334f335b16c71c5191))
+
 ## [1.3.8](https://github.com/angristan/opencode-wakatime/compare/v1.3.7...v1.3.8) (2026-05-13)
 
 ### Bug Fixes
