@@ -6,6 +6,9 @@ const childProcessMocks = vi.hoisted(() => {
 
   const children: Array<{
     emit: (event: string, ...args: unknown[]) => void;
+    exitCode: number | null;
+    kill: ReturnType<typeof vi.fn>;
+    signalCode: NodeJS.Signals | null;
     stdin: {
       end: ReturnType<typeof vi.fn>;
       on: ReturnType<typeof vi.fn>;
@@ -17,10 +20,13 @@ const childProcessMocks = vi.hoisted(() => {
     const child = {
       emit: (event: string, ...args: unknown[]) =>
         listeners.get(event)?.(...args),
-      on: vi.fn((event: string, listener: Listener) => {
+      exitCode: null,
+      kill: vi.fn(() => true),
+      once: vi.fn((event: string, listener: Listener) => {
         listeners.set(event, listener);
         return child;
       }),
+      signalCode: null,
       stdin: {
         end: vi.fn(),
         on: vi.fn(),
@@ -66,6 +72,7 @@ describe("wakatime", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -219,7 +226,7 @@ describe("wakatime", () => {
         },
       ]);
 
-      child.emit("exit", 0, null);
+      child.emit("close", 0, null);
       await expect(promise).resolves.toBeUndefined();
     });
 
@@ -227,6 +234,44 @@ describe("wakatime", () => {
       await sendHeartbeats([]);
 
       expect(childProcessMocks.spawn).not.toHaveBeenCalled();
+    });
+
+    it("waits for the process to close after a timeout", async () => {
+      vi.useFakeTimers();
+      let resolved = false;
+      const promise = sendHeartbeats(
+        [{ entity: "/project/file.ts" }],
+        30_000,
+      ).then(() => {
+        resolved = true;
+      });
+      const child = childProcessMocks.children[0];
+
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      expect(child.kill).toHaveBeenCalledWith("SIGTERM");
+      expect(resolved).toBe(false);
+
+      child.signalCode = "SIGTERM";
+      child.emit("close", null, "SIGTERM");
+      await promise;
+
+      expect(resolved).toBe(true);
+    });
+
+    it("escalates to SIGKILL when the process ignores SIGTERM", async () => {
+      vi.useFakeTimers();
+      const promise = sendHeartbeats([{ entity: "/project/file.ts" }], 30_000);
+      const child = childProcessMocks.children[0];
+
+      await vi.advanceTimersByTimeAsync(32_000);
+
+      expect(child.kill).toHaveBeenNthCalledWith(1, "SIGTERM");
+      expect(child.kill).toHaveBeenNthCalledWith(2, "SIGKILL");
+
+      child.signalCode = "SIGKILL";
+      child.emit("close", null, "SIGKILL");
+      await promise;
     });
   });
 });
