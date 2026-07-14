@@ -8,8 +8,8 @@ import {
   updateLastHeartbeat,
 } from "./state.js";
 import {
-  cleanupHeartbeats,
   ensureCliInstalled,
+  flushHeartbeats,
   type HeartbeatParams,
   sendHeartbeats,
 } from "./wakatime.js";
@@ -247,6 +247,9 @@ async function processHeartbeat(
 
   if (fileChanges.size === 0) {
     logger.debug("No file changes to report");
+    if (force) {
+      await flushHeartbeats();
+    }
     return;
   }
 
@@ -274,13 +277,13 @@ async function processHeartbeat(
   fileChanges.clear();
   updateLastHeartbeat();
 
-  const heartbeatPromise = sendHeartbeats(heartbeats);
+  void sendHeartbeats(heartbeats);
 
-  // On shutdown, wait for all heartbeats to complete
+  // On session completion, wait for both this batch and any previous batch.
   if (force) {
     logger.debug(`Waiting for ${heartbeats.length} heartbeats to complete...`);
-    await heartbeatPromise;
-    logger.debug("Heartbeat batch completed");
+    await flushHeartbeats();
+    logger.debug("All heartbeat batches completed");
   }
 }
 
@@ -473,8 +476,6 @@ export const plugin: Plugin = async (ctx) => {
           opencodeClient,
           true,
         ); // Force send and await
-        // Clean up any lingering heartbeat processes
-        cleanupHeartbeats();
       }
     },
   };
