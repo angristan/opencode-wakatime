@@ -66,6 +66,7 @@ const {
   flushHeartbeats,
   formatArgs,
   isWindows,
+  killActiveHeartbeats,
   sendHeartbeats,
 } = await import("../wakatime.js");
 
@@ -293,6 +294,19 @@ describe("wakatime", () => {
       await Promise.all([heartbeat, flush]);
 
       expect(flushed).toBe(true);
+    });
+
+    it("force-kills an active heartbeat when the host exits", async () => {
+      const heartbeat = sendHeartbeats([{ entity: "/project/file.ts" }]);
+      const child = childProcessMocks.children[0];
+
+      killActiveHeartbeats();
+
+      expect(child.kill).toHaveBeenCalledWith("SIGKILL");
+
+      child.signalCode = "SIGKILL";
+      child.emit("close", null, "SIGKILL");
+      await heartbeat;
     });
   });
 });

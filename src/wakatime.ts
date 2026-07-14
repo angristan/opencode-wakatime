@@ -1,4 +1,8 @@
-import { type SpawnOptions, spawn } from "node:child_process";
+import {
+  type ChildProcess,
+  type SpawnOptions,
+  spawn,
+} from "node:child_process";
 import * as os from "node:os";
 import { dependencies } from "./dependencies.js";
 import { logger } from "./logger.js";
@@ -36,6 +40,24 @@ const DEFAULT_HEARTBEAT_TIMEOUT_MS = 30_000;
 const HEARTBEAT_KILL_GRACE_MS = 2_000;
 
 const pendingHeartbeatBatches = new Set<Promise<void>>();
+const activeHeartbeatProcesses = new Set<ChildProcess>();
+
+/**
+ * Process exit handlers cannot wait for pending promises. Force-kill any
+ * remaining CLI children so one-shot OpenCode commands cannot orphan them.
+ */
+export function killActiveHeartbeats(): void {
+  for (const child of activeHeartbeatProcesses) {
+    if (child.exitCode !== null || child.signalCode !== null) continue;
+    try {
+      child.kill("SIGKILL");
+    } catch {
+      // The process may have exited between the status check and the signal.
+    }
+  }
+}
+
+process.once("exit", killActiveHeartbeats);
 
 export interface HeartbeatParams {
   entity: string;
@@ -150,12 +172,14 @@ export function sendHeartbeats(
 
     const execOptions = buildExecOptions();
     const child = spawn(cliLocation, args, execOptions);
+    activeHeartbeatProcesses.add(child);
 
     let resolved = false;
     let forceKillId: NodeJS.Timeout | undefined;
     const resolveOnce = () => {
       if (!resolved) {
         resolved = true;
+        activeHeartbeatProcesses.delete(child);
         clearTimeout(timeoutId);
         if (forceKillId) clearTimeout(forceKillId);
         resolve();
