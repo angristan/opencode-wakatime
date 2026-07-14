@@ -1,8 +1,4 @@
-import {
-  type ChildProcess,
-  type SpawnOptions,
-  spawn,
-} from "node:child_process";
+import { type SpawnOptions, spawn } from "node:child_process";
 import * as os from "node:os";
 import { dependencies } from "./dependencies.js";
 import { logger } from "./logger.js";
@@ -39,8 +35,7 @@ const VERSION = getVersion();
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 30_000;
 const HEARTBEAT_KILL_GRACE_MS = 2_000;
 
-// Track active heartbeat processes for cleanup
-const activeProcesses: Set<ChildProcess> = new Set();
+const pendingHeartbeatBatches = new Set<Promise<void>>();
 
 export interface HeartbeatParams {
   entity: string;
@@ -104,7 +99,7 @@ export function sendHeartbeats(
   params: HeartbeatParams[],
   timeoutMs: number = DEFAULT_HEARTBEAT_TIMEOUT_MS,
 ): Promise<void> {
-  return new Promise((resolve) => {
+  const heartbeatBatch = new Promise<void>((resolve) => {
     if (params.length === 0) {
       resolve();
       return;
@@ -156,15 +151,11 @@ export function sendHeartbeats(
     const execOptions = buildExecOptions();
     const child = spawn(cliLocation, args, execOptions);
 
-    // Track the process for cleanup
-    activeProcesses.add(child);
-
     let resolved = false;
     let forceKillId: NodeJS.Timeout | undefined;
     const resolveOnce = () => {
       if (!resolved) {
         resolved = true;
-        activeProcesses.delete(child);
         clearTimeout(timeoutId);
         if (forceKillId) clearTimeout(forceKillId);
         resolve();
@@ -230,6 +221,16 @@ export function sendHeartbeats(
         : undefined,
     );
   });
+
+  if (params.length > 0) {
+    pendingHeartbeatBatches.add(heartbeatBatch);
+    void heartbeatBatch.then(
+      () => pendingHeartbeatBatches.delete(heartbeatBatch),
+      () => pendingHeartbeatBatches.delete(heartbeatBatch),
+    );
+  }
+
+  return heartbeatBatch;
 }
 
 export function sendHeartbeat(
@@ -239,25 +240,10 @@ export function sendHeartbeat(
   return sendHeartbeats([params], timeoutMs);
 }
 
-/**
- * Kill all active heartbeat processes.
- * Call this during plugin shutdown to clean up any lingering processes.
- */
-export function cleanupHeartbeats(): void {
-  let killedCount = 0;
-  activeProcesses.forEach((child) => {
-    try {
-      if (!child.killed) {
-        child.kill("SIGTERM");
-        killedCount++;
-      }
-    } catch {
-      // Process may have already exited
-    }
-    activeProcesses.delete(child);
-  });
-  if (killedCount > 0) {
-    logger.info(`Cleaned up ${killedCount} active heartbeat processes`);
+/** Wait for every heartbeat batch that is currently in flight. */
+export async function flushHeartbeats(): Promise<void> {
+  while (pendingHeartbeatBatches.size > 0) {
+    await Promise.all(pendingHeartbeatBatches);
   }
 }
 

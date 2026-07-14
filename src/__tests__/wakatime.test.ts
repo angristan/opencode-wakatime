@@ -61,8 +61,13 @@ vi.mock("which", () => ({
 }));
 
 // Import after mocks
-const { buildExecOptions, formatArgs, isWindows, sendHeartbeats } =
-  await import("../wakatime.js");
+const {
+  buildExecOptions,
+  flushHeartbeats,
+  formatArgs,
+  isWindows,
+  sendHeartbeats,
+} = await import("../wakatime.js");
 
 describe("wakatime", () => {
   beforeEach(() => {
@@ -272,6 +277,22 @@ describe("wakatime", () => {
       child.signalCode = "SIGKILL";
       child.emit("close", null, "SIGKILL");
       await promise;
+    });
+
+    it("flushes an already-running heartbeat batch", async () => {
+      const heartbeat = sendHeartbeats([{ entity: "/project/file.ts" }]);
+      let flushed = false;
+      const flush = flushHeartbeats().then(() => {
+        flushed = true;
+      });
+
+      await Promise.resolve();
+      expect(flushed).toBe(false);
+
+      childProcessMocks.children[0].emit("close", 0, null);
+      await Promise.all([heartbeat, flush]);
+
+      expect(flushed).toBe(true);
     });
   });
 });
