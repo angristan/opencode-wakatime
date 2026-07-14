@@ -37,6 +37,7 @@ const VERSION = getVersion();
 
 // Default timeout for heartbeat processes (30 seconds)
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 30_000;
+const HEARTBEAT_KILL_GRACE_MS = 2_000;
 
 // Track active heartbeat processes for cleanup
 const activeProcesses: Set<ChildProcess> = new Set();
@@ -159,34 +160,46 @@ export function sendHeartbeats(
     activeProcesses.add(child);
 
     let resolved = false;
+    let forceKillId: NodeJS.Timeout | undefined;
     const resolveOnce = () => {
       if (!resolved) {
         resolved = true;
         activeProcesses.delete(child);
         clearTimeout(timeoutId);
+        if (forceKillId) clearTimeout(forceKillId);
         resolve();
       }
     };
 
-    // Safety timeout — kill the process if it hangs
+    // Safety timeout — terminate the process, then force-kill if necessary.
     const timeoutId = setTimeout(() => {
       logger.warn(
-        `Heartbeat batch timed out after ${timeoutMs}ms, killing process`,
+        `Heartbeat batch timed out after ${timeoutMs}ms, terminating wakatime-cli`,
       );
       try {
         child.kill("SIGTERM");
-      } catch {
-        // Process may have already exited
+      } catch (error) {
+        logger.error(`Failed to terminate wakatime-cli: ${error}`);
       }
-      resolveOnce();
+
+      forceKillId = setTimeout(() => {
+        if (child.exitCode !== null || child.signalCode !== null) return;
+
+        logger.warn("wakatime-cli did not exit after SIGTERM, sending SIGKILL");
+        try {
+          child.kill("SIGKILL");
+        } catch (error) {
+          logger.error(`Failed to kill wakatime-cli: ${error}`);
+        }
+      }, HEARTBEAT_KILL_GRACE_MS);
     }, timeoutMs);
 
-    child.on("error", (error) => {
+    child.once("error", (error) => {
       logger.error(`wakatime-cli spawn error: ${error.message}`);
       resolveOnce();
     });
 
-    child.on("exit", (code, signal) => {
+    child.once("close", (code, signal) => {
       if (code !== null && code !== 0) {
         logger.warn(`wakatime-cli exited with code ${code}`);
       } else if (signal) {
