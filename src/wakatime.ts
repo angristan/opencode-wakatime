@@ -1,4 +1,8 @@
-import { type ChildProcess, spawn } from "node:child_process";
+import {
+  type ChildProcess,
+  type SpawnOptions,
+  spawn,
+} from "node:child_process";
 import * as os from "node:os";
 import { dependencies } from "./dependencies.js";
 import { logger } from "./logger.js";
@@ -51,19 +55,9 @@ export function isWindows(): boolean {
   return os.platform() === "win32";
 }
 
-export function buildExecOptions(): {
-  env?: NodeJS.ProcessEnv;
-  detached?: boolean;
-  stdio: "ignore";
-  windowsHide: boolean;
-} {
-  const options: {
-    env?: NodeJS.ProcessEnv;
-    detached?: boolean;
-    stdio: "ignore";
-    windowsHide: boolean;
-  } = {
-    stdio: "ignore",
+export function buildExecOptions(): SpawnOptions {
+  const options: SpawnOptions = {
+    stdio: ["pipe", "ignore", "ignore"],
     windowsHide: true,
   };
 
@@ -96,22 +90,25 @@ export async function ensureCliInstalled(): Promise<boolean> {
 }
 
 /**
- * Send a heartbeat to WakaTime.
+ * Send heartbeats to WakaTime in a single CLI invocation.
  *
- * Uses spawn with stdio: 'ignore' and detached: true to avoid pipe buffer
- * issues that can cause child processes to hang indefinitely.
+ * The first heartbeat is passed through regular CLI arguments. Additional
+ * heartbeats use wakatime-cli's --extra-heartbeats JSON input on stdin, which
+ * avoids creating one process per changed file during batch edits.
  *
- * A timeout is set as a safety net — if the process exceeds the timeout,
- * it will be killed to prevent resource leaks.
- *
- * @param params - Heartbeat parameters
+ * @param params - Heartbeat parameters to send as one batch
  * @param timeoutMs - Timeout in milliseconds (default: 30000)
  */
-export function sendHeartbeat(
-  params: HeartbeatParams,
+export function sendHeartbeats(
+  params: HeartbeatParams[],
   timeoutMs: number = DEFAULT_HEARTBEAT_TIMEOUT_MS,
 ): Promise<void> {
   return new Promise((resolve) => {
+    if (params.length === 0) {
+      resolve();
+      return;
+    }
+
     const cliLocation = dependencies.getCliLocation();
 
     if (!dependencies.isCliInstalled()) {
@@ -120,33 +117,40 @@ export function sendHeartbeat(
       return;
     }
 
-    const client = params.opencodeClient || "cli";
-    const opencodeVersion = params.opencodeVersion || "unknown";
+    const [primary, ...extra] = params;
+    const client = primary.opencodeClient || "cli";
+    const opencodeVersion = primary.opencodeVersion || "unknown";
 
     const args: string[] = [
       "--entity",
-      params.entity,
+      primary.entity,
       "--entity-type",
       "file",
       "--category",
-      params.category ?? "ai coding",
+      primary.category ?? "ai coding",
       "--plugin",
       `opencode-${client}/${opencodeVersion} opencode-wakatime/${VERSION}`,
     ];
 
-    if (params.projectFolder) {
-      args.push("--project-folder", params.projectFolder);
+    if (primary.projectFolder) {
+      args.push("--project-folder", primary.projectFolder);
     }
 
-    if (params.lineChanges !== undefined && params.lineChanges !== 0) {
-      args.push("--ai-line-changes", params.lineChanges.toString());
+    if (primary.lineChanges !== undefined && primary.lineChanges !== 0) {
+      args.push("--ai-line-changes", primary.lineChanges.toString());
     }
 
-    if (params.isWrite) {
+    if (primary.isWrite) {
       args.push("--write");
     }
 
-    logger.debug(`Sending heartbeat: wakatime-cli ${formatArgs(args)}`);
+    if (extra.length > 0) {
+      args.push("--extra-heartbeats");
+    }
+
+    logger.debug(
+      `Sending ${params.length} heartbeat(s): wakatime-cli ${formatArgs(args)}`,
+    );
 
     const execOptions = buildExecOptions();
     const child = spawn(cliLocation, args, execOptions);
@@ -167,7 +171,7 @@ export function sendHeartbeat(
     // Safety timeout — kill the process if it hangs
     const timeoutId = setTimeout(() => {
       logger.warn(
-        `Heartbeat timed out after ${timeoutMs}ms for ${params.entity}, killing process`,
+        `Heartbeat batch timed out after ${timeoutMs}ms, killing process`,
       );
       try {
         child.kill("SIGTERM");
@@ -190,7 +194,36 @@ export function sendHeartbeat(
       }
       resolveOnce();
     });
+
+    const timestamp = Date.now() / 1000;
+    const extraHeartbeats = extra.map((heartbeat) => ({
+      ai_line_changes:
+        heartbeat.lineChanges !== undefined && heartbeat.lineChanges !== 0
+          ? heartbeat.lineChanges
+          : undefined,
+      category: heartbeat.category ?? "ai coding",
+      entity: heartbeat.entity,
+      entity_type: "file",
+      is_write: heartbeat.isWrite || undefined,
+      time: timestamp,
+    }));
+
+    child.stdin?.on("error", (error) => {
+      logger.error(`wakatime-cli stdin error: ${error.message}`);
+    });
+    child.stdin?.end(
+      extraHeartbeats.length > 0
+        ? `${JSON.stringify(extraHeartbeats)}\n`
+        : undefined,
+    );
   });
+}
+
+export function sendHeartbeat(
+  params: HeartbeatParams,
+  timeoutMs: number = DEFAULT_HEARTBEAT_TIMEOUT_MS,
+): Promise<void> {
+  return sendHeartbeats([params], timeoutMs);
 }
 
 /**

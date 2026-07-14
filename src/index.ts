@@ -10,7 +10,8 @@ import {
 import {
   cleanupHeartbeats,
   ensureCliInstalled,
-  sendHeartbeat,
+  type HeartbeatParams,
+  sendHeartbeats,
 } from "./wakatime.js";
 import {
   getWakatimeConfigFilePath,
@@ -249,13 +250,12 @@ async function processHeartbeat(
     return;
   }
 
-  // Collect all heartbeat promises
-  const heartbeatPromises: Promise<void>[] = [];
+  const heartbeats: HeartbeatParams[] = [];
 
   // Send heartbeat for each file that was modified
   for (const [file, info] of fileChanges.entries()) {
     const lineChanges = info.additions - info.deletions;
-    const promise = sendHeartbeat({
+    heartbeats.push({
       entity: file,
       projectFolder,
       lineChanges,
@@ -264,11 +264,6 @@ async function processHeartbeat(
       opencodeVersion,
       opencodeClient,
     });
-
-    if (force) {
-      // When forcing (shutdown), collect promises to await
-      heartbeatPromises.push(promise);
-    }
 
     logger.debug(
       `Sent heartbeat for ${file}: +${info.additions}/-${info.deletions} lines`,
@@ -279,13 +274,13 @@ async function processHeartbeat(
   fileChanges.clear();
   updateLastHeartbeat();
 
+  const heartbeatPromise = sendHeartbeats(heartbeats);
+
   // On shutdown, wait for all heartbeats to complete
-  if (force && heartbeatPromises.length > 0) {
-    logger.debug(
-      `Waiting for ${heartbeatPromises.length} heartbeats to complete...`,
-    );
-    await Promise.all(heartbeatPromises);
-    logger.debug("All heartbeats completed");
+  if (force) {
+    logger.debug(`Waiting for ${heartbeats.length} heartbeats to complete...`);
+    await heartbeatPromise;
+    logger.debug("Heartbeat batch completed");
   }
 }
 
