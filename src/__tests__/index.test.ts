@@ -1,5 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { extractFileChanges } from "../index.js";
+import { extractFileChanges, resolveProjectFolder } from "../index.js";
+
+describe("resolveProjectFolder", () => {
+  it("prefers the explicit worktree", () => {
+    expect(resolveProjectFolder("/worktree", "/project-worktree", "/cwd")).toBe(
+      "/worktree",
+    );
+  });
+
+  it("uses the project worktree before the process cwd", () => {
+    expect(resolveProjectFolder(undefined, "/project-worktree", "/")).toBe(
+      "/project-worktree",
+    );
+  });
+
+  it("falls back to the process cwd when no worktree is available", () => {
+    expect(resolveProjectFolder(undefined, undefined, "/cwd")).toBe("/cwd");
+  });
+});
 
 describe("extractFileChanges", () => {
   describe("edit tool", () => {

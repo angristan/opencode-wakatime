@@ -306,6 +306,14 @@ function trackFileChange(file: string, info: Partial<FileChangeInfo>): void {
   });
 }
 
+export function resolveProjectFolder(
+  worktree: string | undefined,
+  projectWorktree: string | undefined,
+  cwd: string = process.cwd(),
+): string {
+  return worktree || projectWorktree || cwd;
+}
+
 export const plugin: Plugin = async (ctx) => {
   // Read debug setting from ~/.wakatime.cfg (or $WAKATIME_HOME/.wakatime.cfg)
   const wakatimeCfgPath = getWakatimeConfigFilePath();
@@ -321,11 +329,10 @@ export const plugin: Plugin = async (ctx) => {
 
   const { project, worktree, client } = ctx;
 
-  // Derive project name from worktree path
-  const projectName = path.basename(worktree || project.worktree);
-
-  // Determine project folder
-  const projectFolder = worktree || process.cwd();
+  // Prefer OpenCode's project paths over the process cwd. GUI/server clients
+  // may run with `/` as their cwd even though the session has a real worktree.
+  const projectFolder = resolveProjectFolder(worktree, project.worktree);
+  const projectName = path.basename(projectFolder);
 
   // Detect opencode client type (cli, desktop, app) from environment
   // Map "app" to "web" for a clearer plugin identifier
