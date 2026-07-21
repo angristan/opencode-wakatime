@@ -311,7 +311,15 @@ export function resolveProjectFolder(
   projectWorktree: string | undefined,
   cwd: string = process.cwd(),
 ): string {
-  return worktree || projectWorktree || cwd;
+  // Treat "/" as invalid — OpenCode/MiMoCode may pass "/" when no real worktree
+  // is active (e.g. `opencode run` / `mimo run` from CLI), causing the project
+  // name to be empty and show as "unknown" in WakaTime. Fall back to cwd instead.
+  const isValid = (v: string | undefined): v is string => !!v && v !== "/";
+  return isValid(worktree)
+    ? worktree
+    : isValid(projectWorktree)
+      ? projectWorktree
+      : cwd;
 }
 
 export const plugin: Plugin = async (ctx) => {

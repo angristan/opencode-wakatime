@@ -17,6 +17,17 @@ describe("resolveProjectFolder", () => {
   it("falls back to the process cwd when no worktree is available", () => {
     expect(resolveProjectFolder(undefined, undefined, "/cwd")).toBe("/cwd");
   });
+
+  it("treats root '/' as invalid and falls back to cwd", () => {
+    // OpenCode/MiMoCode may pass "/" when no real worktree is active
+    expect(resolveProjectFolder("/", "/", "/cwd")).toBe("/cwd");
+  });
+
+  it("treats root '/' worktree as invalid but uses valid project worktree", () => {
+    expect(resolveProjectFolder("/", "/project-worktree", "/cwd")).toBe(
+      "/project-worktree",
+    );
+  });
 });
 
 describe("extractFileChanges", () => {
