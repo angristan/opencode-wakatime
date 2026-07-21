@@ -20,6 +20,30 @@ Inspired by [claude-code-wakatime](https://github.com/wakatime/claude-code-wakat
 - **Rate-limited heartbeats** - 1 per minute per project to avoid API spam
 - **Session lifecycle** - Sends final heartbeat on session idle/end
 - **Batch tool support** - Tracks file operations executed via batch tool
+- **Configurable plugin identifier** - Distinguish OpenCode from forks (e.g. MiMoCode) in the WakaTime dashboard via a config file
+
+## Plugin Configuration
+
+By default, the plugin identifier sent to WakaTime is `opencode-cli/<version>`.
+If you use a fork like [MiMoCode](https://mimo.xiaomi.com), you can distinguish
+it in the WakaTime dashboard by creating a config file at
+`~/.config/opencode/opencode-wakatime.json`:
+
+```json
+{
+  "clientName": "cli",
+  "pluginPrefix": "mimocode-"
+}
+```
+
+With the above, the identifier becomes `mimocode-cli/<version>`.
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `clientName` | env `OPENCODE_CLIENT` or `"cli"` | Overrides the client name portion of the identifier |
+| `pluginPrefix` | `"opencode-"` | Overrides the prefix portion of the identifier |
+
+Both options are optional — omit the file entirely for default `opencode-cli` behavior.
 
 ## Prerequisites
 
