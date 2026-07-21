@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import type { Hooks, Plugin } from "@opencode-ai/plugin";
 import { LogLevel, logger } from "./logger.js";
@@ -238,6 +239,7 @@ async function processHeartbeat(
   projectFolder: string,
   opencodeVersion: string,
   opencodeClient: string,
+  pluginPrefix: string,
   force: boolean = false,
 ): Promise<void> {
   if (!shouldSendHeartbeat(force) && !force) {
@@ -266,6 +268,7 @@ async function processHeartbeat(
       isWrite: info.isWrite,
       opencodeVersion,
       opencodeClient,
+      pluginPrefix,
     });
 
     logger.debug(
@@ -327,6 +330,26 @@ export const plugin: Plugin = async (ctx) => {
     // Config file doesn't exist or can't be read, keep default INFO level
   }
 
+  // Read plugin config from ~/.config/opencode/opencode-wakatime.json
+  // Supports: { "clientName": "mimocode", "pluginPrefix": "mimocode-" }
+  // This lets OpenCode and MiMoCode (or other forks) share one plugin build
+  // but distinguish themselves in the WakaTime dashboard.
+  let pluginConfig: { clientName?: string; pluginPrefix?: string } = {};
+  try {
+    const pluginCfgPath = path.join(
+      os.homedir(),
+      ".config",
+      "opencode",
+      "opencode-wakatime.json",
+    );
+    pluginConfig = JSON.parse(fs.readFileSync(pluginCfgPath, "utf-8"));
+    logger.debug(
+      `Loaded plugin config from ${pluginCfgPath}: ${JSON.stringify(pluginConfig)}`,
+    );
+  } catch {
+    // No plugin config file — use defaults
+  }
+
   const { project, worktree, client } = ctx;
 
   // Prefer OpenCode's project paths over the process cwd. GUI/server clients
@@ -336,8 +359,12 @@ export const plugin: Plugin = async (ctx) => {
 
   // Detect opencode client type (cli, desktop, app) from environment
   // Map "app" to "web" for a clearer plugin identifier
-  const rawClient = process.env.OPENCODE_CLIENT || "cli";
+  // pluginConfig.clientName overrides the env-derived client name (e.g. "mimocode")
+  const rawClient =
+    pluginConfig.clientName || process.env.OPENCODE_CLIENT || "cli";
   const opencodeClient = rawClient === "app" ? "web" : rawClient;
+  // pluginPrefix lets the WakaTime dashboard distinguish forks (default "opencode-")
+  const pluginPrefix = pluginConfig.pluginPrefix || "opencode-";
 
   // Fetch opencode version from the server health endpoint
   // Use the SDK client's internal HTTP client which bypasses server auth
@@ -401,7 +428,12 @@ export const plugin: Plugin = async (ctx) => {
 
       // If we have pending file changes, try to send heartbeat
       if (fileChanges.size > 0) {
-        await processHeartbeat(projectFolder, opencodeVersion, opencodeClient);
+        await processHeartbeat(
+          projectFolder,
+          opencodeVersion,
+          opencodeClient,
+          pluginPrefix,
+        );
       }
     },
 
@@ -470,6 +502,7 @@ export const plugin: Plugin = async (ctx) => {
             projectFolder,
             opencodeVersion,
             opencodeClient,
+            pluginPrefix,
           );
         }
       }
@@ -481,6 +514,7 @@ export const plugin: Plugin = async (ctx) => {
           projectFolder,
           opencodeVersion,
           opencodeClient,
+          pluginPrefix,
           true,
         ); // Force send and await
       }

@@ -67,6 +67,7 @@ export interface HeartbeatParams {
   isWrite?: boolean;
   opencodeVersion?: string;
   opencodeClient?: string;
+  pluginPrefix?: string;
 }
 
 export function isWindows(): boolean {
@@ -138,6 +139,7 @@ export function sendHeartbeats(
     const [primary, ...extra] = params;
     const client = primary.opencodeClient || "cli";
     const opencodeVersion = primary.opencodeVersion || "unknown";
+    const pluginPrefix = primary.pluginPrefix || "opencode-";
 
     const args: string[] = [
       "--entity",
@@ -147,7 +149,7 @@ export function sendHeartbeats(
       "--category",
       primary.category ?? "ai coding",
       "--plugin",
-      `opencode-${client}/${opencodeVersion} opencode-wakatime/${VERSION}`,
+      `${pluginPrefix}${client}/${opencodeVersion} opencode-wakatime/${VERSION}`,
     ];
 
     if (primary.projectFolder) {
