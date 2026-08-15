@@ -2,37 +2,30 @@ import { describe, expect, it } from "vitest";
 import { extractFileChanges, resolveProjectFolder } from "../index.js";
 
 describe("resolveProjectFolder", () => {
-  it("prefers the explicit worktree", () => {
-    expect(resolveProjectFolder("/worktree", "/project-worktree", "/cwd")).toBe(
-      "/worktree",
-    );
+  it("uses the current working directory", () => {
+    expect(resolveProjectFolder("/cwd")).toBe("/cwd");
   });
 
-  it("uses the project worktree before the process cwd", () => {
-    expect(resolveProjectFolder(undefined, "/project-worktree", "/")).toBe(
-      "/project-worktree",
-    );
-  });
-
-  it("falls back to the process cwd when no worktree is available", () => {
-    expect(resolveProjectFolder(undefined, undefined, "/cwd")).toBe("/cwd");
+  it("falls back to process.cwd() when no argument is given", () => {
+    expect(resolveProjectFolder()).toBe(process.cwd());
   });
 });
 
 describe("extractFileChanges", () => {
   describe("edit tool", () => {
-    it("extracts changes from filediff metadata", () => {
+    it("extracts changes from result metadata files", () => {
       const metadata = {
-        filediff: {
-          file: "/path/to/file.ts",
-          before: "old content",
-          after: "new content",
-          additions: 5,
-          deletions: 2,
-        },
+        files: [
+          {
+            file: "/path/to/file.ts",
+            additions: 5,
+            deletions: 2,
+            status: "modified",
+          },
+        ],
       };
 
-      const result = extractFileChanges("edit", metadata, "");
+      const result = extractFileChanges("edit", undefined, metadata);
 
       expect(result).toEqual([
         {
@@ -46,46 +39,85 @@ describe("extractFileChanges", () => {
       ]);
     });
 
-    it("falls back to filePath when filediff is missing", () => {
-      const metadata = {
-        filePath: "/path/to/file.ts",
+    it("extracts changes from tool output files", () => {
+      const output = {
+        files: [
+          {
+            file: "/path/to/file.ts",
+            additions: 3,
+            deletions: 1,
+            status: "modified",
+          },
+        ],
+        replacements: 1,
       };
 
-      const result = extractFileChanges("edit", metadata, "");
+      const result = extractFileChanges("edit", output, undefined);
 
       expect(result).toEqual([
         {
           file: "/path/to/file.ts",
           info: {
-            additions: 0,
-            deletions: 0,
+            additions: 3,
+            deletions: 1,
             isWrite: false,
           },
         },
       ]);
     });
 
+    it("marks added files as writes", () => {
+      const output = {
+        files: [
+          {
+            file: "/path/to/file.ts",
+            additions: 1,
+            deletions: 0,
+            status: "added",
+          },
+        ],
+      };
+
+      const result = extractFileChanges("edit", output, undefined);
+
+      expect(result[0]?.info.isWrite).toBe(true);
+    });
+
     it("returns empty when no file info available", () => {
-      const result = extractFileChanges("edit", {}, "");
+      const result = extractFileChanges("edit", {}, {});
 
       expect(result).toEqual([]);
     });
 
-    it("handles undefined metadata", () => {
-      const result = extractFileChanges("edit", undefined, "");
+    it("returns empty when output and metadata are undefined", () => {
+      const result = extractFileChanges("edit", undefined, undefined);
 
       expect(result).toEqual([]);
+    });
+
+    it("prefers output files over metadata files", () => {
+      const output = { files: [{ file: "/a.ts", additions: 1, deletions: 0 }] };
+      const metadata = {
+        files: [{ file: "/b.ts", additions: 1, deletions: 0 }],
+      };
+
+      const result = extractFileChanges("edit", output, metadata);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]?.file).toBe("/a.ts");
     });
   });
 
   describe("write tool", () => {
-    it("extracts new file creation", () => {
-      const metadata = {
-        filepath: "/path/to/new-file.ts",
-        exists: false,
+    it("extracts new file creation from output resource", () => {
+      const output = {
+        operation: "write",
+        target: "/path/to/new-file.ts",
+        resource: "/path/to/new-file.ts",
+        existed: false,
       };
 
-      const result = extractFileChanges("write", metadata, "");
+      const result = extractFileChanges("write", output, undefined);
 
       expect(result).toEqual([
         {
@@ -100,12 +132,14 @@ describe("extractFileChanges", () => {
     });
 
     it("extracts file overwrite", () => {
-      const metadata = {
-        filepath: "/path/to/existing-file.ts",
-        exists: true,
+      const output = {
+        operation: "write",
+        target: "/path/to/existing-file.ts",
+        resource: "/path/to/existing-file.ts",
+        existed: true,
       };
 
-      const result = extractFileChanges("write", metadata, "");
+      const result = extractFileChanges("write", output, undefined);
 
       expect(result).toEqual([
         {
@@ -119,138 +153,62 @@ describe("extractFileChanges", () => {
       ]);
     });
 
-    it("returns empty when filepath is missing", () => {
-      const result = extractFileChanges("write", {}, "");
+    it("falls back to target when resource is missing", () => {
+      const output = {
+        operation: "write",
+        target: "/path/to/file.ts",
+        existed: false,
+      };
+
+      const result = extractFileChanges("write", output, undefined);
+
+      expect(result).toEqual([
+        {
+          file: "/path/to/file.ts",
+          info: {
+            additions: 0,
+            deletions: 0,
+            isWrite: true,
+          },
+        },
+      ]);
+    });
+
+    it("returns empty when no file path is available", () => {
+      const result = extractFileChanges("write", {}, {});
 
       expect(result).toEqual([]);
     });
   });
 
   describe("patch tool", () => {
-    it("extracts multiple files from output", () => {
-      const metadata = { diff: 10 };
-      const output = `Patch applied successfully. 2 files changed:
-  src/file1.ts
-  src/file2.ts`;
-
-      const result = extractFileChanges("patch", metadata, output);
-
-      expect(result).toHaveLength(2);
-      expect(result[0].file).toBe("src/file1.ts");
-      expect(result[1].file).toBe("src/file2.ts");
-    });
-
-    it("distributes diff evenly across files", () => {
-      const metadata = { diff: 10 };
-      const output = `Changed:
-  file1.ts
-  file2.ts`;
-
-      const result = extractFileChanges("patch", metadata, output);
-
-      expect(result[0].info.additions).toBe(5);
-      expect(result[1].info.additions).toBe(5);
-    });
-
-    it("handles negative diff as deletions", () => {
-      const metadata = { diff: -6 };
-      const output = `Changed:
-  file1.ts
-  file2.ts`;
-
-      const result = extractFileChanges("patch", metadata, output);
-
-      expect(result[0].info.deletions).toBe(3);
-      expect(result[1].info.deletions).toBe(3);
-    });
-
-    it("returns empty when no files in output", () => {
-      const metadata = { diff: 10 };
-      const output = "No files changed";
-
-      const result = extractFileChanges("patch", metadata, output);
-
-      expect(result).toEqual([]);
-    });
-  });
-
-  describe("multiedit tool", () => {
-    it("extracts changes from multiple edit results", () => {
-      const metadata = {
-        results: [
-          {
-            filediff: {
-              file: "/path/to/file1.ts",
-              additions: 3,
-              deletions: 1,
-            },
-          },
-          {
-            filediff: {
-              file: "/path/to/file2.ts",
-              additions: 7,
-              deletions: 2,
-            },
-          },
+    it("extracts multiple files from output files array", () => {
+      const output = {
+        files: [
+          { file: "src/file1.ts", additions: 5, deletions: 0 },
+          { file: "src/file2.ts", additions: 2, deletions: 1 },
         ],
       };
 
-      const result = extractFileChanges("multiedit", metadata, "");
+      const result = extractFileChanges("patch", output, undefined);
 
       expect(result).toHaveLength(2);
-      expect(result[0]).toEqual({
-        file: "/path/to/file1.ts",
-        info: { additions: 3, deletions: 1, isWrite: false },
-      });
-      expect(result[1]).toEqual({
-        file: "/path/to/file2.ts",
-        info: { additions: 7, deletions: 2, isWrite: false },
-      });
+      expect(result[0]?.file).toBe("src/file1.ts");
+      expect(result[1]?.file).toBe("src/file2.ts");
     });
 
-    it("skips results without filediff", () => {
-      const metadata = {
-        results: [
-          {
-            filediff: { file: "/path/to/file1.ts", additions: 1, deletions: 0 },
-          },
-          { other: "data" },
-          {
-            filediff: { file: "/path/to/file2.ts", additions: 2, deletions: 0 },
-          },
-        ],
-      };
-
-      const result = extractFileChanges("multiedit", metadata, "");
-
-      expect(result).toHaveLength(2);
-    });
-
-    it("returns empty when results is undefined", () => {
-      const result = extractFileChanges("multiedit", {}, "");
+    it("returns empty when no files present", () => {
+      const result = extractFileChanges("patch", {}, {});
 
       expect(result).toEqual([]);
     });
   });
 
   describe("read tool", () => {
-    it("extracts file path from title", () => {
-      const metadata = { preview: "file content preview" };
-      const title = "/path/to/file.ts";
+    it("returns empty (reads do not modify files)", () => {
+      const output = { path: "/path/to/file.ts" };
 
-      const result = extractFileChanges("read", metadata, "", title);
-
-      expect(result).toHaveLength(1);
-      expect(result[0].file).toBe("/path/to/file.ts");
-      expect(result[0].info.additions).toBe(0);
-      expect(result[0].info.deletions).toBe(0);
-      expect(result[0].info.isWrite).toBe(false);
-    });
-
-    it("returns empty array when no title provided", () => {
-      const metadata = { preview: "file content preview" };
-
-      const result = extractFileChanges("read", metadata, "");
+      const result = extractFileChanges("read", output, {});
 
       expect(result).toEqual([]);
     });
@@ -260,7 +218,7 @@ describe("extractFileChanges", () => {
     it("returns empty array (search tools are not tracked)", () => {
       const metadata = { pattern: "**/*.ts" };
 
-      const result = extractFileChanges("glob", metadata, "");
+      const result = extractFileChanges("glob", undefined, metadata);
 
       expect(result).toEqual([]);
     });
@@ -270,7 +228,7 @@ describe("extractFileChanges", () => {
     it("returns empty array (search tools are not tracked)", () => {
       const metadata = { pattern: "TODO" };
 
-      const result = extractFileChanges("grep", metadata, "");
+      const result = extractFileChanges("grep", undefined, metadata);
 
       expect(result).toEqual([]);
     });
@@ -280,17 +238,17 @@ describe("extractFileChanges", () => {
     it("returns empty array (search tools are not tracked)", () => {
       const metadata = { query: "function" };
 
-      const result = extractFileChanges("codesearch", metadata, "");
+      const result = extractFileChanges("codesearch", undefined, metadata);
 
       expect(result).toEqual([]);
     });
   });
 
-  describe("bash tool", () => {
-    it("returns empty array (bash commands are not tracked)", () => {
+  describe("bash/shell tool", () => {
+    it("returns empty array (shell commands are not tracked)", () => {
       const metadata = { command: "npm install" };
 
-      const result = extractFileChanges("bash", metadata, "");
+      const result = extractFileChanges("shell", undefined, metadata);
 
       expect(result).toEqual([]);
     });
@@ -300,7 +258,7 @@ describe("extractFileChanges", () => {
     it("returns empty array for unknown tools", () => {
       const metadata = { some: "data" };
 
-      const result = extractFileChanges("unknown-tool", metadata, "");
+      const result = extractFileChanges("unknown-tool", undefined, metadata);
 
       expect(result).toEqual([]);
     });

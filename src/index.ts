@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { Hooks, Plugin } from "@opencode-ai/plugin";
+import { Plugin } from "@opencode-ai/plugin";
 import { LogLevel, logger } from "./logger.js";
 import {
   initState,
@@ -13,50 +13,9 @@ import {
   type HeartbeatParams,
   sendHeartbeats,
 } from "./wakatime.js";
-import {
-  getWakatimeConfigFilePath,
-  getWakatimeResourcesDir,
-} from "./wakatime-paths.js";
+import { getWakatimeConfigFilePath } from "./wakatime-paths.js";
 
-/**
- * Type definitions for OpenCode SDK event parts
- */
-interface ToolStateCompleted {
-  status: "completed";
-  input: Record<string, unknown>;
-  output: string;
-  title: string;
-  metadata: Record<string, unknown>;
-  time: { start: number; end: number };
-}
-
-interface ToolPart {
-  id: string;
-  sessionID: string;
-  messageID: string;
-  type: "tool";
-  callID: string;
-  tool: string;
-  state: { status: string } & Partial<ToolStateCompleted>;
-}
-
-interface MessagePartUpdatedEvent {
-  type: "message.part.updated";
-  properties: {
-    part: ToolPart | { type: string };
-  };
-}
-
-/**
- * Type guard to check if an event is a MessagePartUpdatedEvent
- */
-function isMessagePartUpdatedEvent(event: {
-  type: string;
-}): event is MessagePartUpdatedEvent {
-  return event.type === "message.part.updated";
-}
-
-// Set of processed callIDs to avoid duplicate processing
+// Set of processed tool call IDs to avoid duplicate processing
 const processedCallIds = new Set<string>();
 
 /**
@@ -72,162 +31,91 @@ export interface FileChangeInfo {
 // Track file changes within the current session
 const fileChanges = new Map<string, FileChangeInfo>();
 
-// Cache opencode version - written to a file so all plugin instances can share it
-const OPENCODE_VERSION_CACHE = path.join(
-  getWakatimeResourcesDir(),
-  "opencode-version-cache.json",
-);
-
 /**
- * FileDiff structure from opencode's edit tool
+ * FileDiff structure returned by the OpenCode V2 edit/patch tools.
+ * Both the tool output and result metadata expose an array of these.
  */
 interface FileDiff {
   file: string;
-  before: string;
-  after: string;
   additions: number;
   deletions: number;
+  status?: "added" | "deleted" | "modified";
 }
 
 /**
- * Extract file change information from tool metadata
- * Handles various tool types: edit, write, patch, multiedit, read
+ * Extract file change information from an executed V2 tool result.
+ *
+ * In OpenCode V2, file-modifying tools expose a `files` array of `FileDiff`
+ * objects through either the tool output or the result metadata:
+ *
+ * - `edit` / `patch` -> `files: [{ file, additions, deletions, status }]`
+ * - `write` -> `output: { operation, target, resource, existed }`
+ *
+ * Search and shell tools do not carry reliable file-change information and are
+ * skipped to avoid false positives.
  */
 export function extractFileChanges(
   tool: string,
+  output: Record<string, unknown> | undefined,
   metadata: Record<string, unknown> | undefined,
-  output: string,
-  title?: string,
 ): Array<{ file: string; info: Partial<FileChangeInfo> }> {
   const changes: Array<{ file: string; info: Partial<FileChangeInfo> }> = [];
 
-  if (!metadata) return changes;
+  const files = extractFiles(output);
+  const metadataFiles = extractFiles(metadata);
 
-  switch (tool) {
-    case "edit": {
-      // Edit tool returns filediff with detailed change info
-      const filediff = metadata.filediff as FileDiff | undefined;
-      if (filediff?.file) {
-        changes.push({
-          file: filediff.file,
-          info: {
-            additions: filediff.additions ?? 0,
-            deletions: filediff.deletions ?? 0,
-            isWrite: false,
-          },
-        });
-      } else {
-        // Fallback to filePath from metadata
-        const filePath = metadata.filePath as string | undefined;
-        if (filePath) {
-          changes.push({
-            file: filePath,
-            info: { additions: 0, deletions: 0, isWrite: false },
-          });
-        }
-      }
-      break;
+  const allFiles = files.length > 0 ? files : metadataFiles;
+
+  if (allFiles.length > 0) {
+    for (const diff of allFiles) {
+      if (!diff.file) continue;
+      changes.push({
+        file: diff.file,
+        info: {
+          additions: diff.additions ?? 0,
+          deletions: diff.deletions ?? 0,
+          isWrite: diff.status === "added",
+        },
+      });
     }
+    return changes;
+  }
 
-    case "write": {
-      // Write tool creates or overwrites files
-      const filepath = metadata.filepath as string | undefined;
-      const exists = metadata.exists as boolean | undefined;
-      if (filepath) {
-        changes.push({
-          file: filepath,
-          info: {
-            additions: 0,
-            deletions: 0,
-            isWrite: !exists, // New file creation
-          },
-        });
-      }
-      break;
-    }
-
-    case "patch": {
-      // Patch tool returns diff count and lists files in output
-      // Output format: "Patch applied successfully. N files changed:\n  file1\n  file2"
-      const diff = metadata.diff as number | undefined;
-      const lines = output.split("\n");
-      const files: string[] = [];
-
-      for (const line of lines) {
-        // Files are listed with 2-space indent
-        if (line.startsWith("  ") && !line.startsWith("   ")) {
-          const file = line.trim();
-          if (file && !file.includes(" ")) {
-            files.push(file);
-          }
-        }
-      }
-
-      // Distribute diff evenly across files (approximation)
-      const perFileDiff =
-        files.length > 0 ? Math.round((diff ?? 0) / files.length) : 0;
-      for (const file of files) {
-        changes.push({
-          file,
-          info: {
-            additions: perFileDiff > 0 ? perFileDiff : 0,
-            deletions: perFileDiff < 0 ? Math.abs(perFileDiff) : 0,
-            isWrite: false,
-          },
-        });
-      }
-      break;
-    }
-
-    case "multiedit": {
-      // Multiedit returns array of edit results, each containing filediff
-      const results = metadata.results as
-        | Array<{ filediff?: FileDiff }>
-        | undefined;
-      if (results) {
-        for (const result of results) {
-          if (result.filediff?.file) {
-            changes.push({
-              file: result.filediff.file,
-              info: {
-                additions: result.filediff.additions ?? 0,
-                deletions: result.filediff.deletions ?? 0,
-                isWrite: false,
-              },
-            });
-          }
-        }
-      }
-      break;
-    }
-
-    case "read": {
-      // Read tool - title contains the file path
-      if (title) {
-        changes.push({
-          file: title,
-          info: { additions: 0, deletions: 0, isWrite: false },
-        });
-      }
-      break;
-    }
-
-    case "glob":
-    case "grep":
-    case "codesearch": {
-      // Search tools - might indicate files being worked on
-      // Don't track these as they don't modify files
-      break;
-    }
-
-    case "bash": {
-      // Bash commands might modify files, but we can't easily track which ones
-      // Skip for now to avoid false positives
-      break;
+  // `write` returns its target file in the tool output rather than a `files` array.
+  if (tool === "write" && output) {
+    const resource =
+      (output.resource as string | undefined) ??
+      (output.target as string | undefined);
+    const existed = output.existed as boolean | undefined;
+    if (resource) {
+      changes.push({
+        file: resource,
+        info: {
+          additions: 0,
+          deletions: 0,
+          isWrite: !existed,
+        },
+      });
     }
   }
 
   return changes;
+}
+
+/**
+ * Pull a `FileDiff[]` from either the `files` field of a tool output or the
+ * `files` field of the result metadata.
+ */
+function extractFiles(source: Record<string, unknown> | undefined): FileDiff[] {
+  if (!source) return [];
+  const files = source.files;
+  if (!Array.isArray(files)) return [];
+  return files.filter(
+    (item): item is FileDiff =>
+      typeof item === "object" &&
+      item !== null &&
+      typeof (item as FileDiff).file === "string",
+  );
 }
 
 /**
@@ -306,188 +194,150 @@ function trackFileChange(file: string, info: Partial<FileChangeInfo>): void {
   });
 }
 
-export function resolveProjectFolder(
-  worktree: string | undefined,
-  projectWorktree: string | undefined,
-  cwd: string = process.cwd(),
-): string {
-  return worktree || projectWorktree || cwd;
+export function resolveProjectFolder(cwd: string = process.cwd()): string {
+  return cwd;
 }
 
-export const plugin: Plugin = async (ctx) => {
-  // Read debug setting from ~/.wakatime.cfg (or $WAKATIME_HOME/.wakatime.cfg)
-  const wakatimeCfgPath = getWakatimeConfigFilePath();
-  try {
-    const cfg = fs.readFileSync(wakatimeCfgPath, "utf-8");
-    const debugMatch = cfg.match(/^\s*debug\s*=\s*true\s*$/m);
-    if (debugMatch) {
-      logger.setLevel(LogLevel.DEBUG);
-    }
-  } catch {
-    // Config file doesn't exist or can't be read, keep default INFO level
-  }
-
-  const { project, worktree, client } = ctx;
-
-  // Prefer OpenCode's project paths over the process cwd. GUI/server clients
-  // may run with `/` as their cwd even though the session has a real worktree.
-  const projectFolder = resolveProjectFolder(worktree, project.worktree);
-  const projectName = path.basename(projectFolder);
-
-  // Detect opencode client type (cli, desktop, app) from environment
-  // Map "app" to "web" for a clearer plugin identifier
-  const rawClient = process.env.OPENCODE_CLIENT || "cli";
-  const opencodeClient = rawClient === "app" ? "web" : rawClient;
-
-  // Fetch opencode version from the server health endpoint
-  // Use the SDK client's internal HTTP client which bypasses server auth
-  // Cache to a file since the plugin is loaded as separate module instances
-  let opencodeVersion = "unknown";
-  try {
-    // Check file cache first (written by whichever instance succeeds first)
-    const cached = JSON.parse(fs.readFileSync(OPENCODE_VERSION_CACHE, "utf-8"));
-    // Cache is valid for 60 seconds
-    if (cached.version && Date.now() - cached.timestamp < 60_000) {
-      opencodeVersion = cached.version;
-    }
-  } catch {
-    // No cache or invalid — fetch from server
-  }
-  if (opencodeVersion === "unknown") {
+export default Plugin.define({
+  id: "opencode-wakatime",
+  setup: async (ctx) => {
+    // Read debug setting from ~/.wakatime.cfg (or $WAKATIME_HOME/.wakatime.cfg)
+    const wakatimeCfgPath = getWakatimeConfigFilePath();
     try {
-      const httpClient =
-        (client as any).global._client ?? (client as any)._client;
-      const { data } = await httpClient.get({ url: "/global/health" });
-      if (data?.version) {
-        opencodeVersion = data.version;
-        try {
-          fs.writeFileSync(
-            OPENCODE_VERSION_CACHE,
-            JSON.stringify({ version: data.version, timestamp: Date.now() }),
-          );
-        } catch {
-          // Ignore write errors
-        }
+      const cfg = fs.readFileSync(wakatimeCfgPath, "utf-8");
+      const debugMatch = cfg.match(/^\s*debug\s*=\s*true\s*$/m);
+      if (debugMatch) {
+        logger.setLevel(LogLevel.DEBUG);
       }
-    } catch (err) {
-      logger.warn(`Could not fetch OpenCode version: ${err}`);
+    } catch {
+      // Config file doesn't exist or can't be read, keep default INFO level
     }
-  }
 
-  logger.debug(
-    `OpenCode client: ${opencodeClient}, version: ${opencodeVersion}`,
-  );
+    // The V2 plugin context exposes the running OpenCode app identity. The
+    // background server may run with `/` as its cwd, so use the process cwd
+    // as the project folder fallback (GUI/server clients may differ).
+    const projectFolder = resolveProjectFolder();
+    const projectName = path.basename(projectFolder);
 
-  // Initialize project-specific state for rate limiting
-  initState(projectFolder);
+    // Detect opencode client type (cli, desktop, app) from the app identity.
+    // Map "app" to "web" for a clearer plugin identifier.
+    const rawClient = ctx.app.name || process.env.OPENCODE_CLIENT || "cli";
+    const opencodeClient = rawClient === "app" ? "web" : rawClient;
+    const opencodeVersion = ctx.app.version || "unknown";
 
-  // Ensure wakatime-cli is installed (will auto-download if needed)
-  const cliInstalled = await ensureCliInstalled();
-
-  if (!cliInstalled) {
-    logger.warn(
-      "WakaTime CLI could not be installed. Please install it manually: https://wakatime.com/terminal",
+    logger.debug(
+      `OpenCode client: ${opencodeClient}, version: ${opencodeVersion}`,
     );
-  } else {
-    logger.info(
-      `OpenCode WakaTime plugin initialized for project: ${projectName}`,
-    );
-  }
 
-  const hooks: Hooks = {
-    // Track chat activity
-    "chat.message": async (_input, _output) => {
-      logger.debug("Chat message received");
+    // Initialize project-specific state for rate limiting
+    initState(projectFolder);
 
-      // If we have pending file changes, try to send heartbeat
-      if (fileChanges.size > 0) {
-        await processHeartbeat(projectFolder, opencodeVersion, opencodeClient);
+    // Ensure wakatime-cli is installed (will auto-download if needed)
+    const cliInstalled = await ensureCliInstalled();
+
+    if (!cliInstalled) {
+      logger.warn(
+        "WakaTime CLI could not be installed. Please install it manually: https://wakatime.com/terminal",
+      );
+    } else {
+      logger.info(
+        `OpenCode WakaTime plugin initialized for project: ${projectName}`,
+      );
+    }
+
+    // Track completed tool executions via the tool hook. This replaces the
+    // V1 `message.part.updated` event parsing and covers both regular tool
+    // calls and batch tool executions.
+    await ctx.tool.hook("execute.after", (event) => {
+      if (event.status !== "completed") return;
+
+      const { tool } = event;
+      const result = event.result;
+      const output =
+        result.output && typeof result.output === "object"
+          ? (result.output as Record<string, unknown>)
+          : undefined;
+      const metadata =
+        result.metadata && typeof result.metadata === "object"
+          ? (result.metadata as Record<string, unknown>)
+          : undefined;
+
+      // Avoid duplicate processing (tools can emit multiple updates)
+      if (processedCallIds.has(event.id)) return;
+      processedCallIds.add(event.id);
+
+      // Clean up old callIds periodically (keep last 1000)
+      if (processedCallIds.size > 1000) {
+        const idsArray = Array.from(processedCallIds);
+        for (let i = 0; i < 500; i++) {
+          const staleId = idsArray[i];
+          if (staleId !== undefined) processedCallIds.delete(staleId);
+        }
       }
-    },
 
-    // Listen to all events for tool execution and session lifecycle
-    // Using message.part.updated captures both regular tool calls AND
-    // tools executed via the batch tool
-    event: async ({ event }) => {
-      // Track completed tool executions via message.part.updated
-      if (isMessagePartUpdatedEvent(event)) {
-        const { part } = event.properties;
+      const changes = extractFileChanges(tool, output, metadata);
 
-        // Only process tool parts
-        if (part.type !== "tool") return;
-
-        const toolPart = part as ToolPart;
-
-        // Only process completed tools
-        if (toolPart.state.status !== "completed") return;
-
-        // Avoid duplicate processing (tools can emit multiple updates)
-        if (processedCallIds.has(toolPart.callID)) return;
-        processedCallIds.add(toolPart.callID);
-
-        // Clean up old callIds periodically (keep last 1000)
-        if (processedCallIds.size > 1000) {
-          const idsArray = Array.from(processedCallIds);
-          for (let i = 0; i < 500; i++) {
-            processedCallIds.delete(idsArray[i]);
+      for (const change of changes) {
+        // Skip directories — they end up as "Other" in WakaTime
+        try {
+          if (fs.statSync(change.file).isDirectory()) {
+            logger.debug(`Skipping directory: ${change.file}`);
+            continue;
           }
+        } catch {
+          // File may not exist (deleted/temp) — still track it
         }
 
-        const { tool } = toolPart;
-        const state = toolPart.state as ToolStateCompleted;
-        const { metadata, title, output } = state;
-
-        logger.debug(`Tool executed: ${tool} - ${title}`);
-
-        // Extract file changes from tool metadata
-        const changes = extractFileChanges(
-          tool,
-          metadata as Record<string, unknown>,
-          output,
-          title,
+        trackFileChange(change.file, change.info);
+        logger.debug(
+          `Tracked: ${change.file} (+${change.info.additions ?? 0}/-${change.info.deletions ?? 0})`,
         );
+      }
 
-        for (const change of changes) {
-          // Skip directories — they end up as "Other" in WakaTime
-          try {
-            if (fs.statSync(change.file).isDirectory()) {
-              logger.debug(`Skipping directory: ${change.file}`);
-              continue;
-            }
-          } catch {
-            // File may not exist (deleted/temp) — still track it
+      // Try to send heartbeat (will be rate-limited)
+      if (changes.length > 0) {
+        void processHeartbeat(projectFolder, opencodeVersion, opencodeClient);
+      }
+    });
+
+    // Send a final heartbeat when a session is deleted or goes idle.
+    const eventStream = ctx.event.subscribe();
+    const iterator = eventStream[Symbol.asyncIterator]();
+    let stopped = false;
+
+    const _heartbeatLoop = (async () => {
+      try {
+        for (;;) {
+          const { done, value: event } = await iterator.next();
+          if (done) return;
+          if (
+            event.type === "session.deleted" ||
+            event.type === "session.idle"
+          ) {
+            logger.debug(
+              `Session event: ${event.type} - sending final heartbeat`,
+            );
+            await processHeartbeat(
+              projectFolder,
+              opencodeVersion,
+              opencodeClient,
+              true,
+            );
           }
-
-          trackFileChange(change.file, change.info);
-          logger.debug(
-            `Tracked: ${change.file} (+${change.info.additions ?? 0}/-${change.info.deletions ?? 0})`,
-          );
         }
-
-        // Try to send heartbeat (will be rate-limited)
-        if (changes.length > 0) {
-          await processHeartbeat(
-            projectFolder,
-            opencodeVersion,
-            opencodeClient,
-          );
+      } finally {
+        if (!stopped) {
+          stopped = true;
+          await iterator.return?.();
         }
       }
+    })();
 
-      // Send final heartbeat on session completion or idle
-      if (event.type === "session.deleted" || event.type === "session.idle") {
-        logger.debug(`Session event: ${event.type} - sending final heartbeat`);
-        await processHeartbeat(
-          projectFolder,
-          opencodeVersion,
-          opencodeClient,
-          true,
-        ); // Force send and await
-      }
-    },
-  };
-
-  return hooks;
-};
-
-export default plugin;
+    return () => {
+      // On cleanup, stop the event loop and flush any in-flight heartbeats.
+      stopped = true;
+      void iterator.return?.();
+      void flushHeartbeats();
+    };
+  },
+});
