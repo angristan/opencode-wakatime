@@ -1,7 +1,16 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { Hooks, Plugin } from "@opencode-ai/plugin";
 import { LogLevel, logger } from "./logger.js";
+import {
+  asRecord,
+  detectOpenCodeClient,
+  firstString,
+  normalizeToolName,
+  type PluginContext,
+  type PluginDefinition,
+  resolveOpenCode2ProjectFolder,
+  toolCallId,
+} from "./opencode-v2.js";
 import {
   initState,
   shouldSendHeartbeat,
@@ -13,10 +22,7 @@ import {
   type HeartbeatParams,
   sendHeartbeats,
 } from "./wakatime.js";
-import {
-  getWakatimeConfigFilePath,
-  getWakatimeResourcesDir,
-} from "./wakatime-paths.js";
+import { getWakatimeConfigFilePath } from "./wakatime-paths.js";
 
 /**
  * Type definitions for OpenCode SDK event parts
@@ -52,8 +58,10 @@ interface MessagePartUpdatedEvent {
  */
 function isMessagePartUpdatedEvent(event: {
   type: string;
+  properties?: unknown;
 }): event is MessagePartUpdatedEvent {
-  return event.type === "message.part.updated";
+  const properties = asRecord(event.properties);
+  return event.type === "message.part.updated" && !!asRecord(properties?.part);
 }
 
 // Set of processed callIDs to avoid duplicate processing
@@ -69,14 +77,8 @@ export interface FileChangeInfo {
   isWrite: boolean; // true if file was created/overwritten
 }
 
-// Track file changes within the current session
-const fileChanges = new Map<string, FileChangeInfo>();
-
-// Cache opencode version - written to a file so all plugin instances can share it
-const OPENCODE_VERSION_CACHE = path.join(
-  getWakatimeResourcesDir(),
-  "opencode-version-cache.json",
-);
+// Per-project file changes. A global OpenCode 2 plugin can observe more than one project.
+const changesByProject = new Map<string, Map<string, FileChangeInfo>>();
 
 /**
  * FileDiff structure from opencode's edit tool
@@ -100,13 +102,15 @@ export function extractFileChanges(
   title?: string,
 ): Array<{ file: string; info: Partial<FileChangeInfo> }> {
   const changes: Array<{ file: string; info: Partial<FileChangeInfo> }> = [];
+  tool = normalizeToolName(tool);
 
-  if (!metadata) return changes;
+  if (!metadata && tool !== "read") return changes;
+  const meta = metadata ?? {};
 
   switch (tool) {
     case "edit": {
       // Edit tool returns filediff with detailed change info
-      const filediff = metadata.filediff as FileDiff | undefined;
+      const filediff = meta.filediff as FileDiff | undefined;
       if (filediff?.file) {
         changes.push({
           file: filediff.file,
@@ -118,7 +122,7 @@ export function extractFileChanges(
         });
       } else {
         // Fallback to filePath from metadata
-        const filePath = metadata.filePath as string | undefined;
+        const filePath = meta.filePath as string | undefined;
         if (filePath) {
           changes.push({
             file: filePath,
@@ -131,8 +135,8 @@ export function extractFileChanges(
 
     case "write": {
       // Write tool creates or overwrites files
-      const filepath = metadata.filepath as string | undefined;
-      const exists = metadata.exists as boolean | undefined;
+      const filepath = meta.filepath as string | undefined;
+      const exists = meta.exists as boolean | undefined;
       if (filepath) {
         changes.push({
           file: filepath,
@@ -149,7 +153,7 @@ export function extractFileChanges(
     case "patch": {
       // Patch tool returns diff count and lists files in output
       // Output format: "Patch applied successfully. N files changed:\n  file1\n  file2"
-      const diff = metadata.diff as number | undefined;
+      const diff = meta.diff as number | undefined;
       const lines = output.split("\n");
       const files: string[] = [];
 
@@ -181,7 +185,7 @@ export function extractFileChanges(
 
     case "multiedit": {
       // Multiedit returns array of edit results, each containing filediff
-      const results = metadata.results as
+      const results = meta.results as
         | Array<{ filediff?: FileDiff }>
         | undefined;
       if (results) {
@@ -230,22 +234,107 @@ export function extractFileChanges(
   return changes;
 }
 
+const INPUT_PATH_KEYS = ["filePath", "filepath", "path", "file", "file_path"];
+
+/**
+ * Normalize an OpenCode 2 `tool.execute.after` result into the same file list
+ * `extractFileChanges` already understands. Falls back to tool input paths when
+ * the result metadata does not include a diff.
+ */
+export function extractToolObservation(
+  tool: string,
+  input: unknown,
+  result: unknown,
+): Array<{ file: string; info: Partial<FileChangeInfo> }> {
+  const resultRecord = asRecord(result);
+  const metadata = asRecord(resultRecord?.metadata);
+  const output =
+    typeof resultRecord?.output === "string"
+      ? resultRecord.output
+      : typeof resultRecord?.content === "string"
+        ? resultRecord.content
+        : typeof result === "string"
+          ? result
+          : "";
+  const title =
+    typeof resultRecord?.title === "string" ? resultRecord.title : undefined;
+
+  const fromResult = extractFileChanges(
+    tool,
+    metadata ??
+      (resultRecord &&
+      ("filediff" in resultRecord ||
+        "filepath" in resultRecord ||
+        "filePath" in resultRecord ||
+        "results" in resultRecord ||
+        "diff" in resultRecord)
+        ? resultRecord
+        : undefined),
+    output,
+    title,
+  );
+  if (fromResult.length > 0) return fromResult;
+
+  const inputRecord = asRecord(input);
+  const inputPath = firstString(inputRecord, INPUT_PATH_KEYS);
+  if (!inputPath) return [];
+
+  const normalized = normalizeToolName(tool);
+  if (normalized === "write") {
+    return extractFileChanges(
+      tool,
+      {
+        filepath: inputPath,
+        exists: inputRecord?.exists === true,
+      },
+      output,
+      title,
+    );
+  }
+
+  return extractFileChanges(
+    tool,
+    { filePath: inputPath },
+    output,
+    title ?? inputPath,
+  );
+}
+
 /**
  * Process and send heartbeats for tracked file changes.
  * When force is true, awaits all heartbeats to ensure they complete before shutdown.
  */
+function projectChanges(projectFolder: string): Map<string, FileChangeInfo> {
+  let bucket = changesByProject.get(projectFolder);
+  if (!bucket) {
+    bucket = new Map();
+    changesByProject.set(projectFolder, bucket);
+  }
+  return bucket;
+}
+
+function hasPendingChanges(): boolean {
+  for (const bucket of changesByProject.values()) {
+    if (bucket.size > 0) return true;
+  }
+  return false;
+}
+
 async function processHeartbeat(
   projectFolder: string,
   opencodeVersion: string,
   opencodeClient: string,
   force: boolean = false,
 ): Promise<void> {
+  initState(projectFolder);
+  const bucket = changesByProject.get(projectFolder);
+
   if (!shouldSendHeartbeat(force) && !force) {
     logger.debug("Skipping heartbeat (rate limited)");
     return;
   }
 
-  if (fileChanges.size === 0) {
+  if (!bucket || bucket.size === 0) {
     logger.debug("No file changes to report");
     if (force) {
       await flushHeartbeats();
@@ -255,8 +344,7 @@ async function processHeartbeat(
 
   const heartbeats: HeartbeatParams[] = [];
 
-  // Send heartbeat for each file that was modified
-  for (const [file, info] of fileChanges.entries()) {
+  for (const [file, info] of bucket.entries()) {
     const lineChanges = info.additions - info.deletions;
     heartbeats.push({
       entity: file,
@@ -273,13 +361,11 @@ async function processHeartbeat(
     );
   }
 
-  // Clear tracked changes and update state
-  fileChanges.clear();
+  bucket.clear();
   updateLastHeartbeat();
 
   void sendHeartbeats(heartbeats);
 
-  // On session completion, wait for both this batch and any previous batch.
   if (force) {
     logger.debug(`Waiting for ${heartbeats.length} heartbeats to complete...`);
     await flushHeartbeats();
@@ -287,18 +373,34 @@ async function processHeartbeat(
   }
 }
 
-/**
- * Update tracked file changes
- */
-function trackFileChange(file: string, info: Partial<FileChangeInfo>): void {
-  const existing = fileChanges.get(file) ?? {
+async function flushAll(
+  opencodeVersion: string,
+  opencodeClient: string,
+): Promise<void> {
+  const folders = [...changesByProject.keys()];
+  if (folders.length === 0) {
+    await flushHeartbeats();
+    return;
+  }
+  for (const folder of folders) {
+    await processHeartbeat(folder, opencodeVersion, opencodeClient, true);
+  }
+}
+
+function trackFileChange(
+  projectFolder: string,
+  file: string,
+  info: Partial<FileChangeInfo>,
+): void {
+  const bucket = projectChanges(projectFolder);
+  const existing = bucket.get(file) ?? {
     additions: 0,
     deletions: 0,
     lastModified: Date.now(),
     isWrite: false,
   };
 
-  fileChanges.set(file, {
+  bucket.set(file, {
     additions: existing.additions + (info.additions ?? 0),
     deletions: existing.deletions + (info.deletions ?? 0),
     lastModified: Date.now(),
@@ -314,180 +416,243 @@ export function resolveProjectFolder(
   return worktree || projectWorktree || cwd;
 }
 
-export const plugin: Plugin = async (ctx) => {
-  // Read debug setting from ~/.wakatime.cfg (or $WAKATIME_HOME/.wakatime.cfg)
-  const wakatimeCfgPath = getWakatimeConfigFilePath();
+function rememberCall(id: string | undefined): boolean {
+  if (!id) return true;
+  if (processedCallIds.has(id)) return false;
+  processedCallIds.add(id);
+  if (processedCallIds.size > 1000) {
+    const ids = Array.from(processedCallIds);
+    for (let i = 0; i < 500; i++) {
+      processedCallIds.delete(ids[i]);
+    }
+  }
+  return true;
+}
+
+function isDirectory(file: string): boolean {
   try {
-    const cfg = fs.readFileSync(wakatimeCfgPath, "utf-8");
-    const debugMatch = cfg.match(/^\s*debug\s*=\s*true\s*$/m);
-    if (debugMatch) {
-      logger.setLevel(LogLevel.DEBUG);
-    }
+    return fs.statSync(file).isDirectory();
   } catch {
-    // Config file doesn't exist or can't be read, keep default INFO level
+    return false;
   }
+}
 
-  const { project, worktree, client } = ctx;
-
-  // Prefer OpenCode's project paths over the process cwd. GUI/server clients
-  // may run with `/` as their cwd even though the session has a real worktree.
-  const projectFolder = resolveProjectFolder(worktree, project.worktree);
-  const projectName = path.basename(projectFolder);
-
-  // Detect opencode client type (cli, desktop, app) from environment
-  // Map "app" to "web" for a clearer plugin identifier
-  const rawClient = process.env.OPENCODE_CLIENT || "cli";
-  const opencodeClient = rawClient === "app" ? "web" : rawClient;
-
-  // Fetch opencode version from the server health endpoint
-  // Use the SDK client's internal HTTP client which bypasses server auth
-  // Cache to a file since the plugin is loaded as separate module instances
-  let opencodeVersion = "unknown";
-  try {
-    // Check file cache first (written by whichever instance succeeds first)
-    const cached = JSON.parse(fs.readFileSync(OPENCODE_VERSION_CACHE, "utf-8"));
-    // Cache is valid for 60 seconds
-    if (cached.version && Date.now() - cached.timestamp < 60_000) {
-      opencodeVersion = cached.version;
+function trackChanges(
+  projectFolder: string,
+  changes: Array<{ file: string; info: Partial<FileChangeInfo> }>,
+): number {
+  let tracked = 0;
+  for (const change of changes) {
+    if (isDirectory(change.file)) {
+      logger.debug(`Skipping directory: ${change.file}`);
+      continue;
     }
-  } catch {
-    // No cache or invalid — fetch from server
+    trackFileChange(projectFolder, change.file, change.info);
+    tracked += 1;
+    logger.debug(
+      `Tracked: ${change.file} (+${change.info.additions ?? 0}/-${change.info.deletions ?? 0})`,
+    );
   }
-  if (opencodeVersion === "unknown") {
-    try {
-      const httpClient =
-        (client as any).global._client ?? (client as any)._client;
-      const { data } = await httpClient.get({ url: "/global/health" });
-      if (data?.version) {
-        opencodeVersion = data.version;
-        try {
-          fs.writeFileSync(
-            OPENCODE_VERSION_CACHE,
-            JSON.stringify({ version: data.version, timestamp: Date.now() }),
-          );
-        } catch {
-          // Ignore write errors
-        }
-      }
-    } catch (err) {
-      logger.warn(`Could not fetch OpenCode version: ${err}`);
-    }
-  }
+  return tracked;
+}
 
-  logger.debug(
-    `OpenCode client: ${opencodeClient}, version: ${opencodeVersion}`,
+function sessionIdFromEvent(properties: unknown): string | undefined {
+  const props = asRecord(properties);
+  const info = asRecord(props?.info);
+  const part = asRecord(props?.part);
+  return (
+    firstString(props, ["sessionID"]) ||
+    firstString(info, ["sessionID", "id"]) ||
+    firstString(part, ["sessionID"])
   );
+}
 
-  // Initialize project-specific state for rate limiting
-  initState(projectFolder);
-
-  // Ensure wakatime-cli is installed (will auto-download if needed)
-  const cliInstalled = await ensureCliInstalled();
-
-  if (!cliInstalled) {
-    logger.warn(
-      "WakaTime CLI could not be installed. Please install it manually: https://wakatime.com/terminal",
-    );
-  } else {
-    logger.info(
-      `OpenCode WakaTime plugin initialized for project: ${projectName}`,
-    );
+function isSessionFlushEvent(event: {
+  type: string;
+  properties?: unknown;
+}): boolean {
+  if (event.type === "session.deleted" || event.type === "session.idle") {
+    return true;
   }
+  if (event.type !== "session.status") return false;
+  const props = asRecord(event.properties);
+  const info = asRecord(props?.info);
+  return props?.status === "idle" || info?.status === "idle";
+}
 
-  const hooks: Hooks = {
-    // Track chat activity
-    "chat.message": async (_input, _output) => {
-      logger.debug("Chat message received");
+async function subscribeEvents(
+  ctx: PluginContext,
+  signal: AbortSignal,
+): Promise<AsyncIterable<{ type: string; properties?: unknown }> | undefined> {
+  const subscribe = ctx.event?.subscribe;
+  if (typeof subscribe !== "function") return undefined;
 
-      // If we have pending file changes, try to send heartbeat
-      if (fileChanges.size > 0) {
-        await processHeartbeat(projectFolder, opencodeVersion, opencodeClient);
-      }
-    },
-
-    // Listen to all events for tool execution and session lifecycle
-    // Using message.part.updated captures both regular tool calls AND
-    // tools executed via the batch tool
-    event: async ({ event }) => {
-      // Track completed tool executions via message.part.updated
-      if (isMessagePartUpdatedEvent(event)) {
-        const { part } = event.properties;
-
-        // Only process tool parts
-        if (part.type !== "tool") return;
-
-        const toolPart = part as ToolPart;
-
-        // Only process completed tools
-        if (toolPart.state.status !== "completed") return;
-
-        // Avoid duplicate processing (tools can emit multiple updates)
-        if (processedCallIds.has(toolPart.callID)) return;
-        processedCallIds.add(toolPart.callID);
-
-        // Clean up old callIds periodically (keep last 1000)
-        if (processedCallIds.size > 1000) {
-          const idsArray = Array.from(processedCallIds);
-          for (let i = 0; i < 500; i++) {
-            processedCallIds.delete(idsArray[i]);
-          }
-        }
-
-        const { tool } = toolPart;
-        const state = toolPart.state as ToolStateCompleted;
-        const { metadata, title, output } = state;
-
-        logger.debug(`Tool executed: ${tool} - ${title}`);
-
-        // Extract file changes from tool metadata
-        const changes = extractFileChanges(
-          tool,
-          metadata as Record<string, unknown>,
-          output,
-          title,
-        );
-
-        for (const change of changes) {
-          // Skip directories — they end up as "Other" in WakaTime
-          try {
-            if (fs.statSync(change.file).isDirectory()) {
-              logger.debug(`Skipping directory: ${change.file}`);
-              continue;
-            }
-          } catch {
-            // File may not exist (deleted/temp) — still track it
-          }
-
-          trackFileChange(change.file, change.info);
-          logger.debug(
-            `Tracked: ${change.file} (+${change.info.additions ?? 0}/-${change.info.deletions ?? 0})`,
-          );
-        }
-
-        // Try to send heartbeat (will be rate-limited)
-        if (changes.length > 0) {
-          await processHeartbeat(
-            projectFolder,
-            opencodeVersion,
-            opencodeClient,
-          );
-        }
-      }
-
-      // Send final heartbeat on session completion or idle
-      if (event.type === "session.deleted" || event.type === "session.idle") {
-        logger.debug(`Session event: ${event.type} - sending final heartbeat`);
-        await processHeartbeat(
-          projectFolder,
-          opencodeVersion,
-          opencodeClient,
-          true,
-        ); // Force send and await
-      }
-    },
+  const start = (options?: { signal?: AbortSignal }) => {
+    try {
+      return subscribe(options);
+    } catch {
+      return undefined;
+    }
   };
 
-  return hooks;
+  let stream = start({ signal }) ?? start();
+  if (!stream) return undefined;
+  if (typeof (stream as Promise<unknown>).then === "function") {
+    stream = await stream;
+  }
+  if (
+    !stream ||
+    typeof (stream as AsyncIterable<unknown>)[Symbol.asyncIterator] !==
+      "function"
+  ) {
+    return undefined;
+  }
+  return stream as AsyncIterable<{ type: string; properties?: unknown }>;
+}
+
+export const plugin: PluginDefinition = {
+  id: "opencode-wakatime",
+  async setup(ctx) {
+    const wakatimeCfgPath = getWakatimeConfigFilePath();
+    try {
+      const cfg = fs.readFileSync(wakatimeCfgPath, "utf-8");
+      if (/^\s*debug\s*=\s*true\s*$/m.test(cfg)) {
+        logger.setLevel(LogLevel.DEBUG);
+      }
+    } catch {
+      // Config file doesn't exist or can't be read, keep default INFO level
+    }
+
+    const fallbackFolder = resolveOpenCode2ProjectFolder({
+      locationDirectory: ctx.location?.directory,
+      projectDirectory: ctx.location?.project?.directory,
+      projectCanonical: ctx.location?.project?.canonical,
+    });
+    const opencodeVersion = ctx.app?.version || "unknown";
+    const opencodeClient = detectOpenCodeClient(ctx.app);
+    const sessionFolders = new Map<string, string>();
+
+    logger.debug(
+      `OpenCode client: ${opencodeClient}, version: ${opencodeVersion}`,
+    );
+
+    const cliInstalled = await ensureCliInstalled();
+    if (!cliInstalled) {
+      logger.warn(
+        "WakaTime CLI could not be installed. Please install it manually: https://wakatime.com/terminal",
+      );
+    } else {
+      logger.info(
+        `OpenCode 2 WakaTime plugin initialized for project: ${path.basename(fallbackFolder)}`,
+      );
+    }
+
+    const resolveFolder = async (sessionID?: string): Promise<string> => {
+      if (!sessionID) return fallbackFolder;
+      const cached = sessionFolders.get(sessionID);
+      if (cached) return cached;
+      try {
+        const info = await ctx.session?.get?.({ sessionID });
+        const directory = info?.location?.directory;
+        if (directory) {
+          sessionFolders.set(sessionID, directory);
+          return directory;
+        }
+      } catch {
+        // Session lookup is best-effort; fall back to the plugin location.
+      }
+      return fallbackFolder;
+    };
+
+    const onActivity = async (sessionID?: string, force = false) => {
+      const folder = await resolveFolder(sessionID);
+      await processHeartbeat(folder, opencodeVersion, opencodeClient, force);
+    };
+
+    if (typeof ctx.tool?.hook === "function") {
+      await ctx.tool.hook("execute.after", async (event) => {
+        if (event.status && event.status !== "completed") return;
+        if (!rememberCall(toolCallId(event))) return;
+
+        const changes = extractToolObservation(
+          event.tool,
+          event.input,
+          event.result,
+        );
+        logger.debug(`Tool executed: ${event.tool}`);
+        if (trackChanges(await resolveFolder(event.sessionID), changes) > 0) {
+          await onActivity(event.sessionID);
+        }
+      });
+    }
+
+    if (typeof ctx.session?.hook === "function") {
+      await ctx.session.hook("prompt", async (event) => {
+        logger.debug("Prompt received");
+        if (hasPendingChanges()) {
+          await onActivity(event.sessionID);
+        }
+      });
+    }
+
+    const controller = new AbortController();
+    void (async () => {
+      const stream = await subscribeEvents(ctx, controller.signal);
+      if (!stream) return;
+      for await (const event of stream) {
+        if (controller.signal.aborted) break;
+
+        if (isMessagePartUpdatedEvent(event)) {
+          const part = event.properties.part;
+          if (part.type !== "tool") continue;
+          const toolPart = part as ToolPart;
+          if (toolPart.state.status !== "completed") continue;
+          if (!rememberCall(toolPart.callID)) continue;
+
+          const state = toolPart.state as ToolStateCompleted;
+          const changes = extractFileChanges(
+            toolPart.tool,
+            state.metadata,
+            state.output,
+            state.title,
+          );
+          const folder = await resolveFolder(
+            toolPart.sessionID || sessionIdFromEvent(event.properties),
+          );
+          if (trackChanges(folder, changes) > 0) {
+            await processHeartbeat(folder, opencodeVersion, opencodeClient);
+          }
+          continue;
+        }
+
+        if (isSessionFlushEvent(event)) {
+          logger.debug(
+            `Session event: ${event.type} - sending final heartbeat`,
+          );
+          const sessionID = sessionIdFromEvent(event.properties);
+          if (sessionID && sessionFolders.has(sessionID)) {
+            await onActivity(sessionID, true);
+          } else {
+            await flushAll(opencodeVersion, opencodeClient);
+          }
+        }
+      }
+    })().catch((err) => {
+      logger.warn(`Event subscription stopped: ${err}`);
+    });
+
+    return async () => {
+      controller.abort();
+      await flushAll(opencodeVersion, opencodeClient);
+    };
+  },
+
+  async server() {
+    logger.warn(
+      "opencode-wakatime targets OpenCode 2. OpenCode 1 should keep using opencode-wakatime.",
+    );
+    return {};
+  },
 };
 
 export default plugin;

@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { extractFileChanges, resolveProjectFolder } from "../index.js";
+import {
+  extractFileChanges,
+  extractToolObservation,
+  plugin,
+  resolveProjectFolder,
+} from "../index.js";
+import {
+  detectOpenCodeClient,
+  resolveOpenCode2ProjectFolder,
+} from "../opencode-v2.js";
 
 describe("resolveProjectFolder", () => {
   it("prefers the explicit worktree", () => {
@@ -304,5 +313,92 @@ describe("extractFileChanges", () => {
 
       expect(result).toEqual([]);
     });
+  });
+
+  describe("OpenCode 2 tool aliases", () => {
+    it("treats apply_patch like patch", () => {
+      const result = extractFileChanges(
+        "apply_patch",
+        { diff: 4 },
+        "Changed:\n  src/a.ts\n  src/b.ts",
+      );
+
+      expect(result).toHaveLength(2);
+      expect(result[0].file).toBe("src/a.ts");
+      expect(result[0].info.additions).toBe(2);
+    });
+  });
+});
+
+describe("extractToolObservation", () => {
+  it("reads filediff metadata from an execute.after result", () => {
+    const result = extractToolObservation(
+      "edit",
+      { filePath: "/ignored.ts" },
+      {
+        title: "edit",
+        output: "",
+        metadata: {
+          filediff: {
+            file: "/path/to/file.ts",
+            additions: 3,
+            deletions: 1,
+          },
+        },
+      },
+    );
+
+    expect(result).toEqual([
+      {
+        file: "/path/to/file.ts",
+        info: { additions: 3, deletions: 1, isWrite: false },
+      },
+    ]);
+  });
+
+  it("falls back to the tool input path", () => {
+    const result = extractToolObservation(
+      "read",
+      { filePath: "/path/to/file.ts" },
+      { output: "contents" },
+    );
+
+    expect(result).toEqual([
+      {
+        file: "/path/to/file.ts",
+        info: { additions: 0, deletions: 0, isWrite: false },
+      },
+    ]);
+  });
+});
+
+describe("OpenCode 2 plugin entry", () => {
+  it("exports a setup definition instead of a V1 hook function", () => {
+    expect(plugin.id).toBe("opencode-wakatime");
+    expect(typeof plugin.setup).toBe("function");
+  });
+});
+
+describe("OpenCode 2 location helpers", () => {
+  it("prefers the session directory over the plugin location", () => {
+    expect(
+      resolveOpenCode2ProjectFolder({
+        sessionDirectory: "/session",
+        locationDirectory: "/location",
+        projectDirectory: "/project",
+        cwd: "/",
+      }),
+    ).toBe("/session");
+  });
+
+  it("maps the app client to web", () => {
+    const previous = process.env.OPENCODE_CLIENT;
+    delete process.env.OPENCODE_CLIENT;
+    expect(detectOpenCodeClient({ channel: "app" })).toBe("web");
+    if (previous === undefined) {
+      delete process.env.OPENCODE_CLIENT;
+    } else {
+      process.env.OPENCODE_CLIENT = previous;
+    }
   });
 });

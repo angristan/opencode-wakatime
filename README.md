@@ -7,7 +7,9 @@
 
 WakaTime plugin for [OpenCode](https://github.com/sst/opencode) - Track your AI coding activity, lines of code, and time spent.
 
-Inspired by [claude-code-wakatime](https://github.com/wakatime/claude-code-wakatime).
+Works with OpenCode 2 using the V2 plugin API (`@opencode-ai/plugin`).
+
+> OpenCode 2 is the current generation of OpenCode. This plugin targets the OpenCode 2 plugin API.
 
 > [!TIP]
 > Also check out [codex-wakatime](https://github.com/angristan/codex-wakatime) for OpenAI Codex CLI!
@@ -15,11 +17,10 @@ Inspired by [claude-code-wakatime](https://github.com/wakatime/claude-code-wakat
 ## Features
 
 - **Automatic CLI management** - Downloads and updates wakatime-cli automatically
-- **Detailed file tracking** - Tracks file reads and modifications (edit, write, patch, multiedit)
+- **Detailed file tracking** - Tracks file modifications (edit, patch, write)
 - **AI coding metrics** - Sends `--ai-line-changes` for WakaTime AI coding analytics
 - **Rate-limited heartbeats** - 1 per minute per project to avoid API spam
 - **Session lifecycle** - Sends final heartbeat on session idle/end
-- **Batch tool support** - Tracks file operations executed via batch tool
 
 ## Prerequisites
 
@@ -57,9 +58,11 @@ opencode.json:
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-wakatime"]
+  "plugins": ["opencode-wakatime"]
 }
 ```
+
+> OpenCode 2 uses the `plugins` key (OpenCode 1 used `plugin`).
 
 ### Manually via npm
 
@@ -68,7 +71,9 @@ npm i -g opencode-wakatime
 opencode-wakatime --install
 ```
 
-This installs the plugin to `~/.config/opencode/plugin/wakatime.js`.
+> This installs the plugin to `~/.config/opencode/plugin/wakatime.js`.
+>
+> OpenCode 2 also discovers local plugins under `~/.config/opencode/plugins/` — you can copy the built `dist/bundle.js` there instead.
 
 To update, run the same commands again.
 
@@ -85,22 +90,20 @@ The plugin will be automatically loaded by OpenCode - no configuration needed.
 
 ## How It Works
 
-The plugin hooks into OpenCode's event system:
+The plugin hooks into OpenCode 2's plugin API. It registers a tool hook to collect file changes and subscribes to session lifecycle events:
 
 ```mermaid
 flowchart TB
-    subgraph OpenCode["OpenCode"]
-        A[Tool Execution<br/>read, edit, write, patch, multiedit, batch] --> H1[message.part.updated]
-        B[Chat Activity] --> H2[chat.message]
-        C[Session Events<br/>idle, end] --> H3[event]
+    subgraph OpenCode["OpenCode 2"]
+        A[Tool Execution<br/>edit, write, patch] --> H1[tool.hook execute.after]
+        C[Session Events<br/>deleted, idle] --> H3[event.subscribe]
     end
 
     subgraph Plugin["opencode-wakatime Plugin"]
         H1 --> P1[Extract File Changes<br/>path, additions, deletions]
         P1 --> Q[Heartbeat Queue]
 
-        H2 -.->|triggers| P2[Process Queue]
-        Q --> P2
+        Q --> P2[Process Queue]
         P2 --> R[Rate Limiter<br/>1 per minute per project]
 
         H3 --> P3[Flush Final<br/>Heartbeat]
@@ -117,21 +120,20 @@ flowchart TB
 
 ### Hooks Used
 
-| Hook           | Purpose                                                          |
-| -------------- | ---------------------------------------------------------------- |
-| `event`        | Tracks tool completions via `message.part.updated` and session lifecycle |
-| `chat.message` | Triggers heartbeat processing on activity                        |
+| Hook                                                              | Purpose                                             |
+| ----------------------------------------------------------------- | --------------------------------------------------- |
+| `tool.hook("execute.after")`                                      | Tracks completed tool executions to collect file changes |
+| `event.subscribe` (`session.deleted` / `session.idle`)            | Sends a final heartbeat on session lifecycle events |
 
 ### Tool Tracking
 
-| Tool        | Data Extracted                                    |
-| ----------- | ------------------------------------------------- |
-| `read`      | File path (from title)                            |
-| `edit`      | File path, additions, deletions (from `filediff`) |
-| `write`     | File path, new file detection                     |
-| `patch`     | File paths from output, diff count                |
-| `multiedit` | File paths and changes from each edit result      |
-| `batch`     | Tracks all child tool operations                  |
+| Tool   | Data Extracted                                      |
+| ------ | --------------------------------------------------- |
+| `edit` | File path, additions, deletions (from `files`/`FileDiff`) |
+| `patch` | File paths and changes (from `files`/`FileDiff`)    |
+| `write` | File path, new file detection (from tool output)    |
+
+Reads and search/shell tools are not tracked because they do not carry reliable file-change information.
 
 ### Heartbeat Data
 
@@ -153,7 +155,6 @@ When `WAKATIME_HOME` is set, the same files are stored in `$WAKATIME_HOME/`.
 | `opencode.log`              | Debug logs (enabled via `debug=true` in `~/.wakatime.cfg`) |
 | `opencode-{hash}.json`      | Per-project state (last heartbeat timestamp) |
 | `opencode-cli-state.json`   | CLI version tracking                       |
-| `opencode-version-cache.json` | Cached OpenCode server version             |
 | `wakatime-cli-*`            | Auto-downloaded CLI binary                 |
 
 ## Development

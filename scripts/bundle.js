@@ -14,7 +14,6 @@ await build({
   bundle: true,
   platform: "node",
   format: "esm",
-  external: ["@opencode-ai/plugin"],
   outfile: "dist/bundle.js",
   define: {
     __VERSION__: JSON.stringify(pkg.version),
