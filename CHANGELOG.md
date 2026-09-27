@@ -1,3 +1,9 @@
+## [1.4.0](https://github.com/angristan/opencode-wakatime/compare/v1.3.9...v1.4.0) (2026-09-27)
+
+### Features
+
+* support OpenCode v1 and v2 in one package ([#87](https://github.com/angristan/opencode-wakatime/issues/87)) ([e771a3c](https://github.com/angristan/opencode-wakatime/commit/e771a3c84f4d5379a04d85eb46f58ef76680ecf9))
+
 ## [1.3.9](https://github.com/angristan/opencode-wakatime/compare/v1.3.8...v1.3.9) (2026-07-14)
 
 ### Bug Fixes
