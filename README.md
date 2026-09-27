@@ -5,7 +5,7 @@
 [![CI](https://github.com/angristan/opencode-wakatime/actions/workflows/workflow.yml/badge.svg)](https://github.com/angristan/opencode-wakatime/actions/workflows/workflow.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-WakaTime plugin for [OpenCode](https://github.com/anomalyco/opencode) v1 and v2. Track your AI coding activity, lines of code, and time spent with the same npm package.
+WakaTime plugin for [OpenCode](https://github.com/anomalyco/opencode) v1 and v2. Track your AI coding activity, lines of code, and time spent.
 
 Inspired by [claude-code-wakatime](https://github.com/wakatime/claude-code-wakatime).
 
