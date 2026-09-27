@@ -9,16 +9,27 @@ const pkg = JSON.parse(
   readFileSync(join(__dirname, "..", "package.json"), "utf-8"),
 );
 
-await build({
-  entryPoints: ["src/index.ts"],
+const options = {
   bundle: true,
   platform: "node",
   format: "esm",
-  external: ["@opencode-ai/plugin"],
-  outfile: "dist/bundle.js",
   define: {
     __VERSION__: JSON.stringify(pkg.version),
   },
+};
+
+await build({
+  ...options,
+  entryPoints: ["src/index.ts", "src/server.ts"],
+  outdir: "dist",
+  splitting: true,
 });
+
+for (const [entry, outfile] of [
+  ["src/index.ts", "dist/bundle.js"],
+  ["src/server.ts", "dist/bundle-v2.js"],
+]) {
+  await build({ ...options, entryPoints: [entry], outfile });
+}
 
 console.log(`Bundled opencode-wakatime v${pkg.version}`);
