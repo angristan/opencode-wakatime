@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { extractFileChanges, resolveProjectFolder } from "../index.js";
+import { extractFileChanges } from "../file-changes.js";
+import { resolveProjectFolder } from "../tracker.js";
 
 describe("resolveProjectFolder", () => {
   it("prefers the explicit worktree", () => {

@@ -12,8 +12,12 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
     }
   },
   "files": [
@@ -24,7 +28,7 @@
     "opencode-wakatime": "bin/cli.js"
   },
   "scripts": {
-    "build": "tsc && npm run bundle",
+    "build": "tsc -p tsconfig.build.json && npm run bundle",
     "bundle": "node scripts/bundle.js",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint .",
@@ -47,7 +51,12 @@
   "author": "",
   "license": "MIT",
   "peerDependencies": {
-    "@opencode-ai/plugin": ">=1.0.0"
+    "@opencode-ai/plugin": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@opencode-ai/plugin": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.8",
@@ -73,5 +82,8 @@
   },
   "overrides": {
     "tar": ">=7.5.7"
+  },
+  "dependencies": {
+    "jsonc-parser": "3.3.1"
   }
 }

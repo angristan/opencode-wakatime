@@ -39,7 +39,9 @@ const VERSION = getVersion();
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 30_000;
 const HEARTBEAT_KILL_GRACE_MS = 2_000;
 
-const pendingHeartbeatBatches = new Set<Promise<void>>();
+export type HeartbeatResult = "interrupted" | undefined;
+
+const pendingHeartbeatBatches = new Set<Promise<HeartbeatResult>>();
 const activeHeartbeatProcesses = new Set<ChildProcess>();
 
 /**
@@ -120,10 +122,10 @@ export async function ensureCliInstalled(): Promise<boolean> {
 export function sendHeartbeats(
   params: HeartbeatParams[],
   timeoutMs: number = DEFAULT_HEARTBEAT_TIMEOUT_MS,
-): Promise<void> {
-  const heartbeatBatch = new Promise<void>((resolve) => {
+): Promise<HeartbeatResult> {
+  const heartbeatBatch = new Promise<HeartbeatResult>((resolve) => {
     if (params.length === 0) {
-      resolve();
+      resolve(undefined);
       return;
     }
 
@@ -131,7 +133,7 @@ export function sendHeartbeats(
 
     if (!dependencies.isCliInstalled()) {
       logger.warn("wakatime-cli not installed, skipping heartbeat");
-      resolve();
+      resolve(undefined);
       return;
     }
 
@@ -176,13 +178,13 @@ export function sendHeartbeats(
 
     let resolved = false;
     let forceKillId: NodeJS.Timeout | undefined;
-    const resolveOnce = () => {
+    const resolveOnce = (result?: "interrupted") => {
       if (!resolved) {
         resolved = true;
         activeHeartbeatProcesses.delete(child);
         clearTimeout(timeoutId);
         if (forceKillId) clearTimeout(forceKillId);
-        resolve();
+        resolve(result);
       }
     };
 
@@ -220,7 +222,7 @@ export function sendHeartbeats(
       } else if (signal) {
         logger.debug(`wakatime-cli terminated by signal ${signal}`);
       }
-      resolveOnce();
+      resolveOnce(signal ? "interrupted" : undefined);
     });
 
     const timestamp = Date.now() / 1000;
@@ -260,7 +262,7 @@ export function sendHeartbeats(
 export function sendHeartbeat(
   params: HeartbeatParams,
   timeoutMs: number = DEFAULT_HEARTBEAT_TIMEOUT_MS,
-): Promise<void> {
+): Promise<HeartbeatResult> {
   return sendHeartbeats([params], timeoutMs);
 }
 
