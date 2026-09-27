@@ -164,11 +164,14 @@ flowchart TB
 | --- | --- | --- |
 | Tool completion | `event` → `message.part.updated` | `ctx.tool.hook("execute.after", ...)` |
 | Chat activity | `chat.message` | `ctx.session.hook("prompt", ...)` |
-| Idle/end | `session.idle`, `session.deleted` | `ctx.event.subscribe()` → idle `session.status`, `session.deleted` |
+| Idle/end | `session.idle`, `session.deleted` | `ctx.event.subscribe()` → `session.execution.succeeded` / `failed` / `interrupted`, `session.deleted` |
 | Unload | `dispose` on v1 releases that support it | Cleanup returned by `setup` |
 
 V2 ignores failed tool calls, filters activity by location, and stops its event
-subscription on unload. Both adapters flush queued heartbeats on idle/end.
+subscription on unload. It also accepts legacy idle events. V2 waits for each
+rate-limited heartbeat send before returning from its tool hook. Cleanup retries
+signal-interrupted batches once, without resending normal CLI exits that may
+have queued data offline. Both adapters flush queued heartbeats on idle/end.
 Tracking state and rate limits are scoped to each project.
 
 ### Tool Tracking

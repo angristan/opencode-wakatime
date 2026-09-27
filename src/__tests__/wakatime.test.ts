@@ -236,6 +236,18 @@ describe("wakatime", () => {
       await expect(promise).resolves.toBeUndefined();
     });
 
+    it("reports host-interrupted sends so cleanup can retry them", async () => {
+      const promise = sendHeartbeats([{ entity: "/project/file.ts" }]);
+      childProcessMocks.children[0].emit("close", null, "SIGTERM");
+      await expect(promise).resolves.toBe("interrupted");
+    });
+
+    it("does not retry a normal offline-queue exit", async () => {
+      const promise = sendHeartbeats([{ entity: "/project/file.ts" }]);
+      childProcessMocks.children[0].emit("close", 102, null);
+      await expect(promise).resolves.toBeUndefined();
+    });
+
     it("does not spawn a process for an empty batch", async () => {
       await sendHeartbeats([]);
 

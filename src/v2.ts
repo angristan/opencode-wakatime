@@ -11,6 +11,9 @@ export async function setupV2(ctx: V2Context): Promise<() => Promise<void>> {
     directory: ctx.location.directory,
     opencodeVersion: ctx.app.version,
     opencodeClient: getClientName(),
+    // V2 can terminate child processes when the runtime scope shuts down.
+    // Finish the rate-limited send before returning control to the host.
+    waitForDelivery: true,
   });
   const controller = new AbortController();
   const registrations: Registration[] = [];
@@ -69,6 +72,9 @@ export async function setupV2(ctx: V2Context): Promise<() => Promise<void>> {
             continue;
           if (
             event.type === "session.deleted" ||
+            event.type === "session.execution.succeeded" ||
+            event.type === "session.execution.failed" ||
+            event.type === "session.execution.interrupted" ||
             event.type === "session.idle" ||
             (event.type === "session.status" &&
               event.data.status?.type === "idle")
@@ -93,6 +99,6 @@ export async function setupV2(ctx: V2Context): Promise<() => Promise<void>> {
   return async () => {
     controller.abort();
     await events;
-    await tracker.processHeartbeat(true);
+    await tracker.flush();
   };
 }

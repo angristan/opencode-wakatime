@@ -24,6 +24,7 @@ export interface TrackerOptions {
   directory: string;
   opencodeVersion: string;
   opencodeClient: string;
+  waitForDelivery?: boolean;
 }
 
 export async function createTracker(options: TrackerOptions) {
@@ -37,6 +38,7 @@ export async function createTracker(options: TrackerOptions) {
   const state = createState(options.projectFolder);
   const sessions = new Map<string, Map<string, FileChangeInfo>>();
   const processedCalls = new Set<string>();
+  const interruptedBatches = new Set<HeartbeatParams[]>();
 
   if (!(await ensureCliInstalled())) {
     logger.warn(
@@ -81,13 +83,24 @@ export async function createTracker(options: TrackerOptions) {
         }),
       );
       state.updateLastHeartbeat();
-      void sendHeartbeats(heartbeats);
+      const delivery = sendHeartbeats(heartbeats).then((result) => {
+        if (result === "interrupted") interruptedBatches.add(heartbeats);
+      });
+      if (options.waitForDelivery) await delivery;
     }
     if (force) await flushHeartbeats();
   }
 
   return {
     processHeartbeat,
+    async flush(): Promise<void> {
+      await processHeartbeat(true);
+      // V2 may cancel a send started by a completion event before plugin cleanup.
+      // Retry each interrupted batch once; normal CLI exits may have queued it offline.
+      const retry = Array.from(interruptedBatches);
+      interruptedBatches.clear();
+      for (const batch of retry) await sendHeartbeats(batch);
+    },
     async track(
       sessionID: string,
       callID: string,

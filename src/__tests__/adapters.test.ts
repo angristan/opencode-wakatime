@@ -236,6 +236,39 @@ describe("v2 adapter", () => {
     ]);
   });
 
+  it("keeps the v2 tool hook open until heartbeat delivery finishes", async () => {
+    const host = await startV2();
+    let finishDelivery!: () => void;
+    const delivery = new Promise<undefined>((resolve) => {
+      finishDelivery = () => resolve(undefined);
+    });
+    vi.mocked(sendHeartbeats).mockReturnValueOnce(delivery);
+    let returned = false;
+    const execution = host.execute(edit()).then(() => {
+      returned = true;
+    });
+    try {
+      await vi.waitFor(() => expect(sendHeartbeats).toHaveBeenCalledOnce());
+      expect(returned).toBe(false);
+    } finally {
+      finishDelivery();
+      await execution;
+    }
+    expect(returned).toBe(true);
+  });
+
+  it("retries an interrupted heartbeat once during cleanup", async () => {
+    const host = await startV2();
+    vi.mocked(sendHeartbeats).mockResolvedValueOnce("interrupted");
+    await host.execute(edit());
+    expect(heartbeats()).toHaveLength(1);
+    await cleanups[0]();
+    expect(heartbeats()).toHaveLength(2);
+    expect(heartbeats()[1]).toEqual(heartbeats()[0]);
+    await cleanups[0]();
+    expect(heartbeats()).toHaveLength(2);
+  });
+
   it("ignores failures, directories, and other locations", async () => {
     const host = await startV2();
     host.locations.set("other", "/project/b");
@@ -294,6 +327,20 @@ describe("v2 adapter", () => {
     host.emit({ type: "session.deleted", data: { sessionID: "s2" } });
     await vi.waitFor(() => expect(heartbeats()).toHaveLength(2));
     expect(heartbeats()[1].entity).toBe("/project/a/two.ts");
+  });
+
+  it.each([
+    "session.execution.succeeded",
+    "session.execution.failed",
+    "session.execution.interrupted",
+  ])("flushes queued changes on %s without waiting for shutdown", async (type) => {
+    const host = await startV2();
+    createState("/project/a").updateLastHeartbeat();
+    await host.execute(edit());
+    expect(heartbeats()).toEqual([]);
+    host.emit({ type, data: { sessionID: "s1" } });
+    await vi.waitFor(() => expect(heartbeats()).toHaveLength(1));
+    expect(host.aborted).toBe(false);
   });
 
   it("processes queued activity on prompt after the rate limit expires", async () => {

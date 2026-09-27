@@ -103,7 +103,7 @@ export const v1Plugin: Plugin = async (ctx) => {
         await tracker.processHeartbeat(true, event.properties.info.id);
       }
     },
-    dispose: async () => tracker.processHeartbeat(true),
+    dispose: async () => tracker.flush(),
   };
   return hooks;
 };
