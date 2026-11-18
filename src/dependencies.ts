@@ -13,6 +13,7 @@ function whichSync(cmd: string): string | null {
     const result = execSync(isWindows ? `where ${cmd}` : `which ${cmd}`, {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
     });
     const firstLine = result.trim().split("\n")[0];
     return firstLine || null;
